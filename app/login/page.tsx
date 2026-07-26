@@ -1,25 +1,46 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
+type Mode = "login" | "signup";
+
 export default function LoginPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
-    "idle",
-  );
+  const [password, setPassword] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setStatus("sending");
+    setStatus("loading");
+    setErrorMsg("");
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    setStatus(error ? "error" : "sent");
+
+    if (mode === "signup") {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) {
+        setStatus("error");
+        setErrorMsg(error.message);
+        return;
+      }
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        setStatus("error");
+        setErrorMsg(error.message);
+        return;
+      }
+    }
+
+    router.push("/");
+    router.refresh();
   }
 
   return (
@@ -43,35 +64,60 @@ export default function LoginPage() {
           <p className="text-muted text-xs mt-1">Alles an einem Ort</p>
         </div>
 
-        {status === "sent" ? (
-          <p className="text-sm text-secondary text-center">
-            Link geschickt an <span className="text-[#f2f2f2]">{email}</span>.
-            Postfach prüfen.
-          </p>
-        ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <input
-              type="email"
-              required
-              placeholder="name@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-11 rounded-lg bg-surface border border-border px-3 text-sm outline-none focus:border-accent"
-            />
-            <button
-              type="submit"
-              disabled={status === "sending"}
-              className="w-full h-11 rounded-lg bg-accent text-bg text-sm font-medium disabled:opacity-60"
-            >
-              {status === "sending" ? "Sende Link..." : "Login-Link senden"}
-            </button>
-            {status === "error" && (
-              <p className="text-danger text-xs text-center">
-                Da ist etwas schiefgelaufen. Nochmal versuchen.
-              </p>
-            )}
-          </form>
-        )}
+        <div className="flex bg-surface rounded-lg p-1 mb-4">
+          <button
+            type="button"
+            onClick={() => setMode("login")}
+            className={`flex-1 h-9 rounded-md text-sm transition-colors ${
+              mode === "login" ? "bg-accent text-bg font-medium" : "text-secondary"
+            }`}
+          >
+            Anmelden
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("signup")}
+            className={`flex-1 h-9 rounded-md text-sm transition-colors ${
+              mode === "signup" ? "bg-accent text-bg font-medium" : "text-secondary"
+            }`}
+          >
+            Registrieren
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <input
+            type="email"
+            required
+            placeholder="name@email.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full h-11 rounded-lg bg-surface border border-border px-3 text-sm outline-none focus:border-accent"
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="Passwort"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full h-11 rounded-lg bg-surface border border-border px-3 text-sm outline-none focus:border-accent"
+          />
+          <button
+            type="submit"
+            disabled={status === "loading"}
+            className="w-full h-11 rounded-lg bg-accent text-bg text-sm font-medium disabled:opacity-60"
+          >
+            {status === "loading"
+              ? "Einen Moment..."
+              : mode === "signup"
+                ? "Konto erstellen"
+                : "Anmelden"}
+          </button>
+          {status === "error" && (
+            <p className="text-danger text-xs text-center">{errorMsg}</p>
+          )}
+        </form>
       </div>
     </div>
   );
