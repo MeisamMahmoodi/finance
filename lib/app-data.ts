@@ -50,7 +50,12 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
       .select("*")
       .eq("status", "pending")
       .order("created_at", { ascending: false }),
-    supabase.from("chat_messages").select("*").order("created_at", { ascending: true }).limit(30),
+    // Wichtig: absteigend sortiert + limit, damit wir die NEUESTEN 30
+    // Nachrichten bekommen (nicht die ältesten) - wird unten wieder in
+    // chronologische Reihenfolge gebracht. Vorher führte "ascending + limit"
+    // dazu, dass neue Nachrichten nach den ersten 30 nie mehr geladen wurden
+    // und die Konversation nach einem Tab-Wechsel wie "verschwunden" wirkte.
+    supabase.from("chat_messages").select("*").order("created_at", { ascending: false }).limit(30),
     supabase
       .from("email_connections")
       .select("email_address, status, last_synced_at")
@@ -116,7 +121,7 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
     transactions,
     insights,
     pendingReviews: (reviewData ?? []) as PendingReview[],
-    chatMessages: (chatData ?? []) as ChatMessage[],
+    chatMessages: ((chatData ?? []) as ChatMessage[]).slice().reverse(),
     monthlyIncome,
     hasIncomeSet: Boolean(settings),
     realBalance,

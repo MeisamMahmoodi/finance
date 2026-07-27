@@ -94,7 +94,8 @@ const createInvoice: FunctionDeclaration = {
 
 const updateDebt: FunctionDeclaration = {
   name: "update_debt",
-  description: "Ändert einen bestehenden Debt-Eintrag (Kredit, Abo oder Rechnung): Name, Betrag, Tag, Fälligkeitsdatum oder Anzahl Raten.",
+  description:
+    "Ändert einen bestehenden Debt-Eintrag (Kredit, Abo oder Rechnung): Name, Betrag, Tag, Fälligkeitsdatum, Anzahl Raten - und über 'kind' auch die Sektion, in der er angezeigt wird. Wenn der Nutzer sagt 'schieb X zu den Abos/Verträgen' oder 'X ist eigentlich ein Kredit/eine Rechnung', muss 'kind' entsprechend gesetzt werden (nicht nur ein Tag), damit der Eintrag wirklich in der richtigen Sektion (Verträge & Abos / Kredite & Raten / Rechnungen) erscheint.",
   parameters: {
     type: SchemaType.OBJECT,
     properties: {
@@ -104,6 +105,12 @@ const updateDebt: FunctionDeclaration = {
       tag: { type: SchemaType.STRING },
       next_due_date: { type: SchemaType.STRING, description: "Datum YYYY-MM-DD" },
       installments_total: { type: SchemaType.NUMBER },
+      kind: {
+        type: SchemaType.STRING,
+        format: "enum",
+        enum: ["loan", "subscription", "invoice"],
+        description: "Verschiebt den Eintrag in eine andere Sektion: 'subscription' = Verträge & Abos, 'loan' = Kredite & Raten, 'invoice' = Rechnungen.",
+      },
     },
     required: ["debt_id"],
   },
@@ -303,11 +310,22 @@ export async function executeAiTool(
       const tag = str(args, "tag");
       const nextDueDate = str(args, "next_due_date");
       const installmentsTotal = num(args, "installments_total");
+      const kind = str(args, "kind");
       if (name) updates.name = name;
       if (totalAmount !== undefined) updates.total_amount = totalAmount;
       if (tag) updates.tag = tag;
       if (nextDueDate) updates.next_due_date = nextDueDate;
       if (installmentsTotal !== undefined) updates.installments_total = Math.max(1, Math.round(installmentsTotal));
+      if (kind === "loan" || kind === "subscription" || kind === "invoice") {
+        updates.kind = kind;
+        // Beim Verschieben in die Abo-Sektion braucht die Karte einen
+        // monatlichen Betrag - ohne expliziten neuen total_amount den
+        // bisherigen Gesamtbetrag übernehmen, damit die Anzeige nicht leer/0 ist.
+        if (kind === "subscription") {
+          const { data: current } = await supabase.from("debts").select("total_amount").eq("id", id).maybeSingle();
+          updates.monthly_amount = totalAmount ?? current?.total_amount ?? null;
+        }
+      }
       if (Object.keys(updates).length === 0) return { error: "Keine Änderungen übergeben" };
       const { data, error } = await supabase
         .from("debts")

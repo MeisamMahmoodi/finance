@@ -41,15 +41,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Nachricht oder Foto fehlt" }, { status: 400 });
   }
 
-  const [{ data: txData }, { data: debts }, { data: history }] = await Promise.all([
+  const [{ data: txData }, { data: debts }, { data: historyDesc }] = await Promise.all([
     supabase.from("transactions").select("*").order("charged_at", { ascending: true }),
     supabase.from("debts").select("*").order("next_due_date", { ascending: true }),
+    // Absteigend + limit, damit die KI die NEUESTEN 20 Nachrichten als
+    // Kontext bekommt statt für immer nur die ältesten 20 (sonst "vergisst"
+    // die KI jede neuere Konversation, sobald mehr als 20 Nachrichten
+    // insgesamt existieren).
     supabase
       .from("chat_messages")
       .select("role, content")
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
       .limit(20),
   ]);
+  const history = historyDesc ? [...historyDesc].reverse() : historyDesc;
 
   const transactions = (txData ?? []) as Transaction[];
   const categoryTotals = computeCategoryBreakdown(transactions);
@@ -91,6 +96,8 @@ WICHTIGSTE REGEL - NIEMALS ERFINDEN: Erfinde niemals Vendor-Namen, Beträge, Dat
 WICHTIGSTE REGEL - NIEMALS FALSCH BEHAUPTEN: Sag niemals "ich habe X eingetragen/gelöscht/geändert", wenn du nicht wirklich die entsprechende Funktion aufgerufen hast und ein Erfolg zurückkam. Wenn ein Tool-Aufruf einen Fehler zurückgibt, sag das ehrlich statt es zu verschweigen.
 
 Du hast über Funktionen echten Zugriff auf das gesamte System: Transaktionen und Debts (Kredite, Abos, Rechnungen) auflisten, anlegen, ändern, löschen, sowie offene KI-Rückfragen ("ist X ein Vertrag?") direkt beantworten. Nutze diese Funktionen aktiv, wenn der Nutzer klare, konkrete Angaben macht - z.B. "lösch die Amazon-Buchung", "trag 20€ Tanken für heute ein", "markier die Zahnarzt-Rechnung als bezahlt". Bekommst du ein Foto eines Belegs/einer Rechnung, lies Empfänger, Betrag, Datum/Fälligkeit und Kategorie so genau wie möglich aus dem Bild heraus (nicht raten) und trage es über create_transaction (bereits bezahlter Kauf) oder create_invoice (offene Rechnung mit Fälligkeitsdatum) ein - fasse danach kurz zusammen, was genau du aus dem Foto gelesen und eingetragen hast, damit der Nutzer es prüfen kann. Falls das Foto unscharf/unlesbar ist oder du dir bei einem Wert nicht sicher bist, sag das explizit statt einen Wert zu erfinden.
+
+WICHTIG bei "verschieb X zu den Abos/Verträgen/Krediten/Rechnungen" o.ä.: Das bedeutet, den Eintrag wirklich in die andere Sektion zu verschieben - dafür MUSST du update_debt mit dem Parameter "kind" aufrufen (kind: "subscription" = Verträge & Abos, "loan" = Kredite & Raten, "invoice" = Rechnungen). Nur einen Tag zu setzen reicht nicht aus und verändert die Sektion nicht - der Nutzer merkt sofort, wenn sich nichts sichtbar geändert hat.
 
 Aktuelle Finanzdaten (IDs in eckigen Klammern kannst du für update_/delete_-Aufrufe verwenden):
 ${contextLines}`;
