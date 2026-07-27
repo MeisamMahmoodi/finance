@@ -66,15 +66,15 @@ export async function POST(request: Request) {
     prediction !== null ? `Prognose nächster Monat (Gesamtausgaben): ${currencyFormat.format(prediction)}` : null,
     "Ausgaben diesen Monat nach Kategorie:",
     ...categoryTotals.map((c) => `  ${c.category}: ${currencyFormat.format(c.total)}`),
-    "Verträge/Abos/Rechnungen (Debts):",
+    "Verträge/Abos/Rechnungen (Debts) - installments_total zeigt bei ALLEN Einträgen, ob es sich um eine echte Mehrfach-Ratenzahlung handelt (installments_total > 1) oder eine einmalige Zahlung (installments_total = 1), unabhängig von 'kind':",
     ...(debts ?? []).map(
       (d) =>
-        `  [${d.id}] ${d.name}: ${currencyFormat.format(d.total_amount)}${
+        `  [${d.id}] ${d.name}: ${currencyFormat.format(d.total_amount)}, installments_total=${d.installments_total}, installments_paid=${d.installments_paid}${
           d.kind === "loan"
-            ? ` (Kredit, ${d.installments_paid}/${d.installments_total} Raten bezahlt)`
+            ? ` (aktuell: Kredit/Rate, ${d.installments_paid}/${d.installments_total} bezahlt)`
             : d.kind === "invoice"
-              ? ` (Rechnung${d.tag ? `, ${d.tag}` : ""}${d.amount_paid >= d.total_amount ? ", bezahlt" : ", offen"})`
-              : " (Abo)"
+              ? ` (aktuell: Rechnung${d.tag ? `, Tag=${d.tag}` : ""}${d.amount_paid >= d.total_amount ? ", bezahlt" : ", offen"})`
+              : " (aktuell: Abo)"
         }`,
     ),
     "Letzte Buchungen:",
@@ -98,6 +98,8 @@ WICHTIGSTE REGEL - NIEMALS FALSCH BEHAUPTEN: Sag niemals "ich habe X eingetragen
 Du hast über Funktionen echten Zugriff auf das gesamte System: Transaktionen und Debts (Kredite, Abos, Rechnungen) auflisten, anlegen, ändern, löschen, sowie offene KI-Rückfragen ("ist X ein Vertrag?") direkt beantworten. Nutze diese Funktionen aktiv, wenn der Nutzer klare, konkrete Angaben macht - z.B. "lösch die Amazon-Buchung", "trag 20€ Tanken für heute ein", "markier die Zahnarzt-Rechnung als bezahlt". Bekommst du ein Foto eines Belegs/einer Rechnung, lies Empfänger, Betrag, Datum/Fälligkeit und Kategorie so genau wie möglich aus dem Bild heraus (nicht raten) und trage es über create_transaction (bereits bezahlter Kauf) oder create_invoice (offene Rechnung mit Fälligkeitsdatum) ein - fasse danach kurz zusammen, was genau du aus dem Foto gelesen und eingetragen hast, damit der Nutzer es prüfen kann. Falls das Foto unscharf/unlesbar ist oder du dir bei einem Wert nicht sicher bist, sag das explizit statt einen Wert zu erfinden.
 
 WICHTIG bei "verschieb X zu den Abos/Verträgen/Krediten/Rechnungen" o.ä.: Das bedeutet, den Eintrag wirklich in die andere Sektion zu verschieben - dafür MUSST du update_debt mit dem Parameter "kind" aufrufen (kind: "subscription" = Verträge & Abos, "loan" = Kredite & Raten, "invoice" = Rechnungen). Nur einen Tag zu setzen reicht nicht aus und verändert die Sektion nicht - der Nutzer merkt sofort, wenn sich nichts sichtbar geändert hat.
+
+WICHTIG bei "welche davon sind echte Raten/Rechnungen" o.ä. (z.B. bei Klarna/BNPL-Posten): Eine echte Ratenzahlung (kind="loan") liegt NUR vor, wenn es mehrere Teilzahlungen gibt (installments_total > 1, erkennbar z.B. an "X von Y" im Foto/Screenshot des Nutzers). Ein Posten mit nur einer Fälligkeit ohne "X von Y"-Zähler ist KEINE Ratenzahlung, sondern eine einmalige Rechnung (kind="invoice") - auch wenn er über Klarna/eine BNPL-Plattform läuft. Verwechsle das nicht: nicht jede Klarna-Zahlung ist eine Rate. Wenn der Nutzer "verschieb alle Raten" sagt, verschiebe NUR die Posten mit echtem installments_total > 1 (oder die er dir explizit als Rate benennt) - nicht alle Klarna/BNPL-Posten pauschal. Bist du unsicher, ob ein Posten eine echte Rate ist, frag lieber kurz nach statt zu raten.
 
 Aktuelle Finanzdaten (IDs in eckigen Klammern kannst du für update_/delete_-Aufrufe verwenden):
 ${contextLines}`;
