@@ -74,6 +74,89 @@ function getClient() {
   return client;
 }
 
+function addDays(iso: string, days: number) {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Legt für eine erkannte wiederkehrende Zahlung (deterministisch oder per KI
+// bestätigt) einen "Debt"-Eintrag vom Typ Subscription an bzw. aktualisiert
+// ihn, damit die Debts-Seite automatisch alle Verträge/Abos auflistet - ohne
+// dass der Nutzer sie manuell eintragen muss.
+async function upsertSubscriptionDebt(
+  serviceClient: SupabaseClient,
+  userId: string,
+  vendorKey: string,
+  vendorLabel: string,
+  amount: number,
+  lastChargedAt: string,
+  sourceTransactionId: string,
+) {
+  const { data: existing } = await serviceClient
+    .from("debts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("vendor_key", vendorKey)
+    .eq("kind", "subscription")
+    .maybeSingle();
+
+  const nextDue = addDays(lastChargedAt, 30);
+  const payload = {
+    name: vendorLabel,
+    total_amount: amount,
+    monthly_amount: amount,
+    next_due_date: nextDue,
+    source_transaction_id: sourceTransactionId,
+  };
+
+  if (existing) {
+    await serviceClient.from("debts").update(payload).eq("id", existing.id);
+  } else {
+    await serviceClient.from("debts").insert({
+      user_id: userId,
+      vendor_key: vendorKey,
+      kind: "subscription",
+      amount_paid: 0,
+      installments_total: 1,
+      installments_paid: 0,
+      ...payload,
+    });
+  }
+}
+
+// KI-Einschätzung, ob eine einzelne (noch nicht wiederholte) Buchung ein
+// Abo/Vertrag sein könnte - z.B. eine brandneue Netflix-Buchung, die die
+// deterministische Erkennung (braucht 2+ Vorkommen) noch nicht fassen kann.
+async function detectContractCandidates(
+  rows: { id: string; vendor: string; amount: number }[],
+): Promise<Record<string, "yes" | "no" | "unsure">> {
+  if (rows.length === 0) return {};
+  const model = getClient().getGenerativeModel({
+    model: "gemini-3.1-flash-lite",
+    generationConfig: { responseMimeType: "application/json" },
+  });
+
+  const list = rows.map((r) => `${r.id}|${r.vendor}|${r.amount.toFixed(2)}€`).join("\n");
+  const prompt = `Für jede Buchung (Format "id|Empfänger|Betrag") schätze ein, ob es sich um ein Abo oder einen Vertrag handelt (wiederkehrende Zahlung wie Miete, Streaming, Versicherung, Fitnessstudio, Software-Abo, Kredit-/Ratenzahlung, Handyvertrag) oder um eine einmalige Ausgabe.
+Antworte "yes" wenn du dir sehr sicher bist, dass es ein Abo/Vertrag ist.
+Antworte "no" wenn es eindeutig eine einmalige Ausgabe ist (z.B. Restaurant, einzelner Einkauf).
+Antworte "unsure" wenn es nicht eindeutig ist und ein Mensch das besser beurteilen kann.
+
+Antworte NUR mit JSON: {"id1": "yes|no|unsure", ...} für jede id aus der Liste, sonst nichts.
+
+Buchungen:
+${list}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text()) as Record<string, "yes" | "no" | "unsure">;
+  } catch (err) {
+    console.error("[categorize] Vertragserkennung fehlgeschlagen:", err instanceof Error ? err.message : err);
+    return {};
+  }
+}
+
 async function categorizeBatchWithGemini(
   rows: { id: string; vendor: string; amount: number }[],
 ): Promise<Record<string, string>> {
@@ -147,6 +230,37 @@ export async function categorizeUserTransactions(
     if (error) console.error("[categorize] Update Wiederkehrend fehlgeschlagen:", error.message);
   }
 
+  // Jede erkannte wiederkehrende Zahlung soll automatisch als "Debt"
+  // (kind=subscription) sichtbar sein - nicht nur als Kategorie-Tag. Pro
+  // Vendor-Gruppe wird ein Eintrag angelegt/aktualisiert (neuester Betrag +
+  // geschätztes nächstes Fälligkeitsdatum).
+  const recurringGroups = new Map<string, TxRow[]>();
+  for (const t of allTx as TxRow[]) {
+    if (!recurringIds.has(t.id)) continue;
+    const key = normalizeVendor(t.vendor);
+    if (!key) continue;
+    if (!recurringGroups.has(key)) recurringGroups.set(key, []);
+    recurringGroups.get(key)!.push(t);
+  }
+  for (const [vendorKey, rows] of recurringGroups) {
+    const latest = [...rows].sort(
+      (a, b) => new Date(b.charged_at).getTime() - new Date(a.charged_at).getTime(),
+    )[0];
+    try {
+      await upsertSubscriptionDebt(
+        serviceClient,
+        userId,
+        vendorKey,
+        latest.vendor,
+        Math.abs(latest.amount),
+        latest.charged_at,
+        latest.id,
+      );
+    } catch (err) {
+      console.error("[categorize] Subscription-Debt-Upsert fehlgeschlagen:", err instanceof Error ? err.message : err);
+    }
+  }
+
   const remaining = (allTx as TxRow[]).filter(
     (t) => !recurringIds.has(t.id) && !t.category,
   );
@@ -186,5 +300,72 @@ export async function categorizeUserTransactions(
     );
   }
 
-  return { categorized, recurring: toRecurring.length };
+  // Für Buchungen, die noch keine 2. Wiederholung hatten (die deterministische
+  // Erkennung greift erst ab dem 2. Vorkommen), fragen wir die KI, ob es sich
+  // trotzdem schon um ein Abo/Vertrag handeln könnte - z.B. die erste
+  // Netflix-Abbuchung. Bei "yes" wandert die Buchung direkt in Debts, bei
+  // "unsure" landet eine Rückfrage im AI-Chat, bei "no" bleibt die normale
+  // Kategorie stehen.
+  const vendorCounts = new Map<string, number>();
+  for (const t of allTx as TxRow[]) {
+    const key = normalizeVendor(t.vendor);
+    if (!key) continue;
+    vendorCounts.set(key, (vendorCounts.get(key) ?? 0) + 1);
+  }
+  const singleOccurrence = remaining.filter((t) => (vendorCounts.get(normalizeVendor(t.vendor)) ?? 0) < 2);
+
+  const { data: existingReviews } = await serviceClient
+    .from("pending_reviews")
+    .select("transaction_id")
+    .eq("user_id", userId);
+  const alreadyReviewed = new Set((existingReviews ?? []).map((r) => r.transaction_id));
+
+  const candidateBatches: TxRow[][] = [];
+  for (let i = 0; i < singleOccurrence.length; i += BATCH_SIZE) {
+    candidateBatches.push(singleOccurrence.slice(i, i + BATCH_SIZE));
+  }
+
+  let recurringFromAi = 0;
+  for (let i = 0; i < candidateBatches.length; i += CONCURRENCY) {
+    const slice = candidateBatches.slice(i, i + CONCURRENCY);
+    const results = await Promise.all(slice.map((batch) => detectContractCandidates(batch)));
+
+    for (let idx = 0; idx < slice.length; idx++) {
+      const batch = slice[idx];
+      const result = results[idx];
+      for (const tx of batch) {
+        const guess = result[tx.id];
+        if (!guess) continue;
+
+        if (guess === "yes") {
+          await serviceClient.from("transactions").update({ category: RECURRING_CATEGORY }).eq("id", tx.id);
+          try {
+            await upsertSubscriptionDebt(
+              serviceClient,
+              userId,
+              normalizeVendor(tx.vendor),
+              tx.vendor,
+              Math.abs(tx.amount),
+              tx.charged_at,
+              tx.id,
+            );
+            recurringFromAi++;
+          } catch (err) {
+            console.error("[categorize] Subscription-Debt (KI) fehlgeschlagen:", err instanceof Error ? err.message : err);
+          }
+        } else if (guess === "unsure" && !alreadyReviewed.has(tx.id)) {
+          await serviceClient.from("pending_reviews").insert({
+            user_id: userId,
+            transaction_id: tx.id,
+            vendor: tx.vendor,
+            amount: Math.abs(tx.amount),
+            question: `Ist "${tx.vendor}" (${Math.abs(tx.amount).toFixed(2)}€) ein Abo oder Vertrag?`,
+            ai_guess: "unsure",
+          });
+        }
+      }
+    }
+  }
+
+  return { categorized, recurring: toRecurring.length + recurringFromAi };
 }

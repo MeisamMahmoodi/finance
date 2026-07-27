@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export function AddDebtForm({ onDone }: { onDone: () => void }) {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [total, setTotal] = useState("");
   const [installments, setInstallments] = useState("1");
@@ -32,7 +30,6 @@ export function AddDebtForm({ onDone }: { onDone: () => void }) {
         setError(data.error || "Fehler beim Speichern");
         return;
       }
-      router.refresh();
       onDone();
     } finally {
       setLoading(false);

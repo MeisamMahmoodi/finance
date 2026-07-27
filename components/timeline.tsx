@@ -45,14 +45,20 @@ function initials(vendor: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export function Timeline({ transactions }: { transactions: Transaction[] }) {
+export function Timeline({
+  transactions,
+  showHeading = true,
+}: {
+  transactions: Transaction[];
+  showHeading?: boolean;
+}) {
   const sorted = [...transactions].sort(
     (a, b) => new Date(b.charged_at).getTime() - new Date(a.charged_at).getTime(),
   );
 
   return (
     <div className="flex flex-col">
-      <p className="text-xs text-secondary mb-3 px-1">Transactions</p>
+      {showHeading && <p className="text-xs text-secondary mb-3 px-1">Transactions</p>}
       <div className="flex flex-col gap-1">
         {sorted.map((t) => {
           const color = categoryColor(t.category);

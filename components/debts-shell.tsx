@@ -21,16 +21,19 @@ const PERIOD_DAYS: Record<Period, number> = {
   yearly: 366,
 };
 
-export function DebtsShell({ debts }: { debts: Debt[] }) {
+export function DebtsShell({ debts, onChanged }: { debts: Debt[]; onChanged: () => void }) {
   const [period, setPeriod] = useState<Period>("monthly");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
+
+  const subscriptions = debts.filter((d) => d.kind === "subscription");
+  const loans = debts.filter((d) => d.kind === "loan");
 
   const totalDue = useMemo(() => {
     const horizon = Date.now() + PERIOD_DAYS[period] * 86_400_000;
     return debts
       .filter((d) => !d.next_due_date || new Date(d.next_due_date).getTime() <= horizon)
-      .reduce((sum, d) => sum + Math.max(d.total_amount - d.amount_paid, 0), 0);
+      .reduce((sum, d) => sum + Math.max((d.kind === "subscription" ? d.monthly_amount ?? d.total_amount : d.total_amount) - d.amount_paid, 0), 0);
   }, [debts, period]);
 
   return (
@@ -69,24 +72,47 @@ export function DebtsShell({ debts }: { debts: Debt[] }) {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {debts.map((d) => (
-          <DebtCard key={d.id} debt={d} />
-        ))}
-      </div>
+      {subscriptions.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-secondary px-1">Verträge &amp; Abos (KI-erkannt)</p>
+          <div className="flex flex-col gap-2">
+            {subscriptions.map((d) => (
+              <DebtCard key={d.id} debt={d} onChanged={onChanged} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {loans.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs text-secondary px-1">Kredite &amp; Raten</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {loans.map((d) => (
+              <DebtCard key={d.id} debt={d} onChanged={onChanged} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {debts.length === 0 && !showForm && (
-        <p className="text-muted text-sm text-center py-4">Noch keine Debts angelegt.</p>
+        <p className="text-muted text-sm text-center py-4">
+          Noch keine Debts. Verträge/Abos erkennt die KI automatisch beim Synchronisieren, oder leg manuell einen Kredit/eine Rate an.
+        </p>
       )}
 
       {showForm ? (
-        <AddDebtForm onDone={() => setShowForm(false)} />
+        <AddDebtForm
+          onDone={() => {
+            setShowForm(false);
+            onChanged();
+          }}
+        />
       ) : (
         <button
           onClick={() => setShowForm(true)}
-          className="h-11 rounded-lg border border-dashed border-border text-secondary text-sm"
+          className="h-11 rounded-lg border border-dashed border-border text-secondary text-sm transition-transform active:scale-[0.98]"
         >
-          + Debt hinzufügen
+          + Debt manuell hinzufügen
         </button>
       )}
     </div>

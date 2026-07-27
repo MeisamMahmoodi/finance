@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import type { Box } from "@/lib/types";
 
 const currencyFormat = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
 
-export function BoxesList({ boxes }: { boxes: Box[] }) {
-  const router = useRouter();
+export function BoxesList({ boxes, onChanged }: { boxes: Box[]; onChanged: () => void }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [target, setTarget] = useState("");
@@ -25,7 +23,7 @@ export function BoxesList({ boxes }: { boxes: Box[] }) {
       setName("");
       setTarget("");
       setShowForm(false);
-      router.refresh();
+      onChanged();
     } finally {
       setLoading(false);
     }
@@ -37,7 +35,7 @@ export function BoxesList({ boxes }: { boxes: Box[] }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ delta }),
     });
-    router.refresh();
+    onChanged();
   }
 
   return (

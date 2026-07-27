@@ -16,3 +16,21 @@ body {
   background: #111113;
   color: #ffffff;
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Aktive Tab-Pill in der BottomNav gleitet weich zwischen den Positionen -
+   fühlt sich damit nach echter App-Navigation statt Seiten-Reload an. */
+.liquid-glass-nav {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+}

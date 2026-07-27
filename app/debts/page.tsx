@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { DebtsShell } from "@/components/debts-shell";
-import { BottomNav } from "@/components/bottom-nav";
-import type { Debt } from "@/lib/types";
+import { loadAppData } from "@/lib/app-data";
+import { AppShell } from "@/components/app-shell";
 
 export default async function DebtsPage() {
   const supabase = await createClient();
@@ -14,16 +13,7 @@ export default async function DebtsPage() {
     redirect("/login");
   }
 
-  const { data: debts } = await supabase
-    .from("debts")
-    .select("*")
-    .order("next_due_date", { ascending: true, nullsFirst: false });
+  const data = await loadAppData(supabase, user);
 
-  return (
-    <div className="min-h-dvh px-4 py-6 pb-28">
-      <h1 className="text-sm font-medium mb-6">Debts</h1>
-      <DebtsShell debts={(debts ?? []) as Debt[]} />
-      <BottomNav />
-    </div>
-  );
+  return <AppShell data={data} initialTab="debts" settingsParams={{}} />;
 }

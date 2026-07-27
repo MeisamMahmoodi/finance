@@ -32,6 +32,27 @@ export type Debt = {
   installments_total: number;
   installments_paid: number;
   next_due_date: string | null;
+  kind: "loan" | "subscription";
+  monthly_amount: number | null;
+  vendor_key: string | null;
+};
+
+export type PendingReview = {
+  id: string;
+  transaction_id: string | null;
+  vendor: string;
+  amount: number;
+  question: string;
+  ai_guess: string | null;
+  status: "pending" | "confirmed" | "rejected";
+  created_at: string;
+};
+
+export type ChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  created_at: string;
 };
 
 export type Box = {
