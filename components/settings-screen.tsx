@@ -30,22 +30,25 @@ type SettingsParams = {
   bank_error?: string;
 };
 
+type BankConnection = { id: string; aspsp_name: string | null; status: string | null; last_synced_at: string | null };
+
 export function SettingsScreen({
   userEmail,
   gmailConnection,
-  bankConnection,
+  bankConnections,
   monthlyIncome,
   hasIncomeSet,
   searchParams,
 }: {
   userEmail: string;
   gmailConnection: { email_address: string | null; status: string | null; last_synced_at: string | null } | null;
-  bankConnection: { aspsp_name: string | null; status: string | null; last_synced_at: string | null } | null;
+  bankConnections: BankConnection[];
   monthlyIncome: number;
   hasIncomeSet: boolean;
   searchParams: SettingsParams;
 }) {
-  const hasAnyConnection = gmailConnection?.status === "connected" || bankConnection?.status === "connected";
+  const connectedBanks = bankConnections.filter((c) => c.status === "connected");
+  const hasAnyConnection = gmailConnection?.status === "connected" || connectedBanks.length > 0;
 
   return (
     <div className="px-4 pt-4 pb-28">
@@ -88,30 +91,32 @@ export function SettingsScreen({
         )}
         {searchParams.gmail_connected && <p className="text-success text-xs px-1">Gmail verbunden.</p>}
 
-        <div className="flex items-center gap-3 bg-surface rounded-lg px-3 py-2.5">
-          <span className="text-sm flex-1">{bankConnection?.aspsp_name ?? "Bankkonto"}</span>
-          <span className={`text-xs ${bankConnection?.status === "connected" ? "text-success" : "text-muted"}`}>
-            {bankConnection?.status === "connected" ? "verbunden" : "nicht verbunden"}
-          </span>
-        </div>
-
-        {bankConnection?.status === "connected" ? (
-          <>
+        <p className="text-xs text-secondary mt-2 px-1">Banken &amp; Fintechs</p>
+        {connectedBanks.map((c) => (
+          <div key={c.id} className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-3 bg-surface rounded-lg px-3 py-2.5">
+              <span className="text-sm flex-1">{c.aspsp_name ?? "Bankkonto"}</span>
+              <span className="text-xs text-success">verbunden</span>
+            </div>
             <p className="text-muted text-xs px-1">
-              {bankConnection.last_synced_at
-                ? `Zuletzt synchronisiert: ${new Date(bankConnection.last_synced_at).toLocaleString("de-DE")}`
+              {c.last_synced_at
+                ? `Zuletzt synchronisiert: ${new Date(c.last_synced_at).toLocaleString("de-DE")}`
                 : "Noch nicht synchronisiert"}
             </p>
-            <BankSyncButton />
-          </>
-        ) : (
-          <Link
-            href="/bank/connect"
-            className="w-full h-10 rounded-lg bg-accent text-bg text-sm font-medium flex items-center justify-center transition-transform active:scale-[0.98]"
-          >
-            Bank verbinden
-          </Link>
+            <BankSyncButton connectionId={c.id} />
+          </div>
+        ))}
+
+        {connectedBanks.length === 0 && (
+          <p className="text-muted text-xs px-1">Noch keine Bank verbunden.</p>
         )}
+
+        <Link
+          href="/bank/connect"
+          className="w-full h-10 rounded-lg border border-dashed border-border text-secondary text-sm flex items-center justify-center transition-transform active:scale-[0.98] mt-1"
+        >
+          + Weiteres Konto verbinden
+        </Link>
 
         {searchParams.bank_error && (
           <p className="text-danger text-xs px-1">

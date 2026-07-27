@@ -24,7 +24,7 @@ export type AppData = {
   debts: Debt[];
   userEmail: string;
   gmailConnection: { email_address: string | null; status: string | null; last_synced_at: string | null } | null;
-  bankConnection: { aspsp_name: string | null; status: string | null; last_synced_at: string | null } | null;
+  bankConnections: { id: string; aspsp_name: string | null; status: string | null; last_synced_at: string | null }[];
 };
 
 // Ein einziger gebündelter Ladevorgang für die gesamte App (Home + Debts +
@@ -37,7 +37,7 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
     { data: reviewData },
     { data: chatData },
     { data: gmailConn },
-    { data: bankConn },
+    { data: bankConns },
     { data: settings },
     { data: accounts },
     { data: boxesData },
@@ -56,25 +56,27 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
       .select("email_address, status, last_synced_at")
       .eq("user_id", user.id)
       .maybeSingle(),
+    // Alle Bank-Verbindungen des Nutzers, nicht nur die zuletzt erstellte -
+    // ein Nutzer kann mehrere Banken/Fintechs (Klarna, Revolut, ...)
+    // gleichzeitig verbunden haben.
     supabase
       .from("bank_connections")
-      .select("aspsp_name, status, last_synced_at")
+      .select("id, aspsp_name, status, last_synced_at")
       .eq("user_id", user.id)
-      .eq("status", "connected")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .order("created_at", { ascending: false }),
     supabase.from("user_settings").select("monthly_income").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("bank_accounts")
-      .select("id, name, iban, balance, balance_updated_at")
+      .select("id, name, iban, balance, balance_updated_at, connection_id")
       .eq("user_id", user.id)
       .not("balance", "is", null),
     supabase.from("boxes").select("*").order("created_at", { ascending: true }),
     supabase.from("debts").select("*").order("next_due_date", { ascending: true, nullsFirst: false }),
   ]);
 
-  const hasRealConnection = Boolean(gmailConn || bankConn);
+  const bankConnections = bankConns ?? [];
+  const hasRealConnection = Boolean(gmailConn) || bankConnections.some((c) => c.status === "connected");
+  const connectionNameById = new Map(bankConnections.map((c) => [c.id, c.aspsp_name]));
 
   const transactions: Transaction[] =
     txData && txData.length > 0 ? (txData as Transaction[]) : hasRealConnection ? [] : demoTransactions;
@@ -122,7 +124,7 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
     balanceChangePercent,
     accounts: (accounts ?? []).map((a) => ({
       id: a.id,
-      name: a.name || bankConn?.aspsp_name || "Bankkonto",
+      name: a.name || connectionNameById.get(a.connection_id) || "Bankkonto",
       masked: a.iban ? `****${a.iban.slice(-4)}` : "****",
       balance: Number(a.balance ?? 0),
     })),
@@ -130,6 +132,6 @@ export async function loadAppData(supabase: SupabaseClient, user: User): Promise
     debts: (debtsData ?? []) as Debt[],
     userEmail: user.email ?? "",
     gmailConnection: gmailConn ?? null,
-    bankConnection: bankConn ?? null,
+    bankConnections,
   };
 }

@@ -76,7 +76,7 @@ export function AppShell({
             <SettingsScreen
               userEmail={data.userEmail}
               gmailConnection={data.gmailConnection}
-              bankConnection={data.bankConnection}
+              bankConnections={data.bankConnections}
               monthlyIncome={data.monthlyIncome}
               hasIncomeSet={data.hasIncomeSet}
               searchParams={settingsParams}

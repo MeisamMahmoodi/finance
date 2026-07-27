@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function BankSyncButton() {
+export function BankSyncButton({ connectionId }: { connectionId: string }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
     "idle",
@@ -13,7 +13,11 @@ export function BankSyncButton() {
   async function handleSync() {
     setStatus("loading");
     try {
-      const res = await fetch("/api/sync/bank", { method: "POST" });
+      const res = await fetch("/api/sync/bank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId }),
+      });
       const data = await res.json();
       if (!res.ok) {
         setStatus("error");
