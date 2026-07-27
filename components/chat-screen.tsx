@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import type { AiInsight, ChatMessage, PendingReview } from "@/lib/types";
 
-export function AiFeed({
+export function ChatScreen({
   insights,
   pendingReviews,
   initialMessages,
@@ -82,61 +82,68 @@ export function AiFeed({
     }
   }
 
+  const isEmpty = insights.length === 0 && messages.length === 0 && reviews.length === 0;
+
   return (
-    <div className="flex flex-col gap-2">
-      <p className="text-xs text-secondary mb-1 px-1">AI-Assistent</p>
+    <div className="pb-28 min-h-dvh flex flex-col">
+      <div className="px-4 pt-4 pb-2">
+        <h1 className="text-sm font-medium">AI-Assistent</h1>
+        <p className="text-muted text-xs mt-0.5">Fragen zu deinen Finanzen, Rückfragen zu Verträgen/Abos</p>
+      </div>
 
-      {reviews.map((r) => (
-        <div key={r.id} className="bg-surface rounded-card p-3 flex flex-col gap-2.5 animate-[fadeIn_0.25s_ease]">
-          <div className="flex gap-2.5 items-start">
+      <div className="flex-1 px-4 flex flex-col gap-2 mt-2">
+        {reviews.map((r) => (
+          <div key={r.id} className="bg-surface rounded-card p-3 flex flex-col gap-2.5 animate-[fadeIn_0.25s_ease]">
+            <div className="flex gap-2.5 items-start">
+              <Sparkle />
+              <p className="text-sm leading-relaxed">{r.question}</p>
+            </div>
+            <div className="flex gap-2 pl-[26px]">
+              <button
+                onClick={() => handleAnswer(r.id, "yes")}
+                disabled={answering === r.id}
+                className="flex-1 h-9 rounded-full bg-accent text-bg text-xs font-medium disabled:opacity-50 transition-transform active:scale-95"
+              >
+                Ja, Vertrag
+              </button>
+              <button
+                onClick={() => handleAnswer(r.id, "no")}
+                disabled={answering === r.id}
+                className="flex-1 h-9 rounded-full bg-bg border border-border text-xs font-medium disabled:opacity-50 transition-transform active:scale-95"
+              >
+                Nein
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {insights.map((i) => (
+          <div key={i.id} className="bg-surface rounded-card p-3 flex gap-2.5 items-start">
             <Sparkle />
-            <p className="text-sm leading-relaxed">{r.question}</p>
+            <p className="text-sm leading-relaxed">{i.message}</p>
           </div>
-          <div className="flex gap-2 pl-[26px]">
-            <button
-              onClick={() => handleAnswer(r.id, "yes")}
-              disabled={answering === r.id}
-              className="flex-1 h-9 rounded-full bg-accent text-bg text-xs font-medium disabled:opacity-50 transition-transform active:scale-95"
-            >
-              Ja, Vertrag
-            </button>
-            <button
-              onClick={() => handleAnswer(r.id, "no")}
-              disabled={answering === r.id}
-              className="flex-1 h-9 rounded-full bg-bg border border-border text-xs font-medium disabled:opacity-50 transition-transform active:scale-95"
-            >
-              Nein
-            </button>
+        ))}
+
+        {messages.map((m) => (
+          <div
+            key={m.id}
+            className={`rounded-card p-3 text-sm leading-relaxed max-w-[88%] ${
+              m.role === "user" ? "bg-accent text-bg self-end" : "bg-surface self-start flex gap-2.5 items-start"
+            }`}
+          >
+            {m.role === "assistant" && <Sparkle />}
+            <span>{m.content}</span>
           </div>
-        </div>
-      ))}
+        ))}
 
-      {insights.map((i) => (
-        <div key={i.id} className="bg-surface rounded-card p-3 flex gap-2.5 items-start">
-          <Sparkle />
-          <p className="text-sm leading-relaxed">{i.message}</p>
-        </div>
-      ))}
+        {isEmpty && (
+          <p className="text-muted text-sm py-8 text-center">
+            Frag mich etwas zu deinen Ausgaben, oder ich melde mich hier von selbst, sobald mir etwas auffällt.
+          </p>
+        )}
+      </div>
 
-      {messages.map((m) => (
-        <div
-          key={m.id}
-          className={`rounded-card p-3 text-sm leading-relaxed max-w-[88%] ${
-            m.role === "user" ? "bg-accent text-bg self-end" : "bg-surface self-start flex gap-2.5 items-start"
-          }`}
-        >
-          {m.role === "assistant" && <Sparkle />}
-          <span>{m.content}</span>
-        </div>
-      ))}
-
-      {insights.length === 0 && messages.length === 0 && reviews.length === 0 && (
-        <p className="text-muted text-sm py-2 px-1">
-          Frag mich etwas zu deinen Ausgaben, oder ich melde mich hier von selbst, sobald mir etwas auffällt.
-        </p>
-      )}
-
-      <form onSubmit={handleSubmit} className="flex gap-2 mt-1">
+      <form onSubmit={handleSubmit} className="flex gap-2 px-4 mt-3">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}

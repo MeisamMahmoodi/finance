@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
-export type TabKey = "home" | "debts" | "settings";
+export type TabKey = "home" | "debts" | "chat" | "settings";
 
 const TABS: { key: TabKey; label: string; icon: typeof HomeIcon }[] = [
   { key: "home", label: "Home", icon: HomeIcon },
   { key: "debts", label: "Debts", icon: DebtsIcon },
+  { key: "chat", label: "Chat", icon: ChatIcon },
   { key: "settings", label: "Profil", icon: ProfileIcon },
 ];
 
@@ -103,6 +104,14 @@ function DebtsIcon({ active }: { active: boolean }) {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#ffffff" : "#6b6b6f"} strokeWidth="2">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 3" />
+    </svg>
+  );
+}
+
+function ChatIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#ffffff" : "#6b6b6f"} strokeWidth="2">
+      <path d="M4 4h16v12H8l-4 4V4z" />
     </svg>
   );
 }

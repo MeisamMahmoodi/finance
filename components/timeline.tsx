@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { Transaction } from "@/lib/types";
 
 const currencyFormat = new Intl.NumberFormat("de-DE", {
@@ -45,6 +48,8 @@ function initials(vendor: string) {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
+const DEFAULT_VISIBLE = 6;
+
 export function Timeline({
   transactions,
   showHeading = true,
@@ -52,15 +57,18 @@ export function Timeline({
   transactions: Transaction[];
   showHeading?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const sorted = [...transactions].sort(
     (a, b) => new Date(b.charged_at).getTime() - new Date(a.charged_at).getTime(),
   );
+  const visible = expanded ? sorted : sorted.slice(0, DEFAULT_VISIBLE);
+  const hiddenCount = sorted.length - visible.length;
 
   return (
     <div className="flex flex-col">
       {showHeading && <p className="text-xs text-secondary mb-3 px-1">Transactions</p>}
       <div className="flex flex-col gap-1">
-        {sorted.map((t) => {
+        {visible.map((t) => {
           const color = categoryColor(t.category);
           return (
             <div
@@ -98,6 +106,22 @@ export function Timeline({
           </p>
         )}
       </div>
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded(true)}
+          className="mt-2 h-9 rounded-full border border-border text-secondary text-xs transition-transform active:scale-[0.98]"
+        >
+          {hiddenCount} weitere anzeigen
+        </button>
+      )}
+      {expanded && sorted.length > DEFAULT_VISIBLE && (
+        <button
+          onClick={() => setExpanded(false)}
+          className="mt-2 h-9 rounded-full text-muted text-xs transition-transform active:scale-[0.98]"
+        >
+          Weniger anzeigen
+        </button>
+      )}
     </div>
   );
 }

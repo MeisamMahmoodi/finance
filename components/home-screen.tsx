@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Header } from "@/components/header";
 import { Timeline } from "@/components/timeline";
-import { AiFeed } from "@/components/ai-feed";
 import { StatsCard } from "@/components/stats-card";
 import { AccountCard } from "@/components/account-card";
 import { BoxesList } from "@/components/boxes-list";
@@ -22,14 +21,16 @@ export function HomeScreen({
   data,
   onRefresh,
   onSettingsClick,
+  onOpenChat,
 }: {
   data: AppData;
   onRefresh: () => void;
   onSettingsClick: () => void;
+  onOpenChat: () => void;
 }) {
   const [tab, setTab] = useState<"accounts" | "boxes">("accounts");
   const [showAddForm, setShowAddForm] = useState(false);
-  const { transactions, insights, pendingReviews, chatMessages, monthlyIncome, hasIncomeSet, realBalance, balanceUpdatedAt, balanceChangePercent, accounts, boxes } = data;
+  const { transactions, pendingReviews, monthlyIncome, hasIncomeSet, realBalance, balanceUpdatedAt, balanceChangePercent, accounts, boxes } = data;
 
   const fixed = computeMonthlyFixed(transactions);
   const available = realBalance !== null ? realBalance : monthlyIncome - fixed;
@@ -122,7 +123,33 @@ export function HomeScreen({
 
       <div className="px-4 mt-4 flex flex-col gap-4">
         <StatsCard categoryTotals={categoryTotals} prediction={prediction} />
-        <AiFeed insights={insights} pendingReviews={pendingReviews} initialMessages={chatMessages} onRefresh={onRefresh} />
+
+        <button
+          onClick={onOpenChat}
+          className="bg-surface rounded-card p-4 flex items-center gap-3 text-left transition-transform active:scale-[0.98]"
+        >
+          <div className="w-9 h-9 rounded-full bg-bg border border-border flex items-center justify-center shrink-0">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#111113" strokeWidth="1.8">
+              <path d="M12 3l1.9 5.3L19 10l-5.1 1.7L12 17l-1.9-5.3L5 10l5.1-1.7L12 3z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium">AI-Assistent</p>
+            <p className="text-muted text-xs">
+              {pendingReviews.length > 0
+                ? `${pendingReviews.length} Rückfrage${pendingReviews.length > 1 ? "n" : ""} wartet auf dich`
+                : "Frag etwas zu deinen Ausgaben"}
+            </p>
+          </div>
+          {pendingReviews.length > 0 && (
+            <span className="w-6 h-6 rounded-full bg-accent text-bg text-xs font-medium flex items-center justify-center shrink-0">
+              {pendingReviews.length}
+            </span>
+          )}
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a9a9d" strokeWidth="2" className="shrink-0">
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { BottomNav, type TabKey } from "@/components/bottom-nav";
 import { HomeScreen } from "@/components/home-screen";
 import { DebtsScreen } from "@/components/debts-screen";
+import { ChatScreen } from "@/components/chat-screen";
 import { SettingsScreen } from "@/components/settings-screen";
 import type { AppData } from "@/lib/app-data";
 
@@ -55,9 +56,22 @@ export function AppShell({
           transition={{ duration: 0.16, ease: "easeOut" }}
         >
           {tab === "home" && (
-            <HomeScreen data={data} onRefresh={refresh} onSettingsClick={() => handleTabChange("settings")} />
+            <HomeScreen
+              data={data}
+              onRefresh={refresh}
+              onSettingsClick={() => handleTabChange("settings")}
+              onOpenChat={() => handleTabChange("chat")}
+            />
           )}
           {tab === "debts" && <DebtsScreen debts={data.debts} onRefresh={refresh} />}
+          {tab === "chat" && (
+            <ChatScreen
+              insights={data.insights}
+              pendingReviews={data.pendingReviews}
+              initialMessages={data.chatMessages}
+              onRefresh={refresh}
+            />
+          )}
           {tab === "settings" && (
             <SettingsScreen
               userEmail={data.userEmail}
