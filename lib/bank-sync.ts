@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listTransactions, type EbTransaction } from "@/lib/enable-banking";
+import { categorizeUserTransactions } from "@/lib/categorize";
 
 export type BankConnectionRow = {
   id: string;
@@ -94,6 +95,15 @@ export async function syncBankConnection(
     .from("bank_connections")
     .update({ last_synced_at: new Date().toISOString() })
     .eq("id", connection.id);
+
+  // Läuft immer (auch ohne neue Buchungen) - verarbeitet nur Zeilen ohne
+  // Kategorie, ist also billig, wenn schon alles kategorisiert ist. Deckt
+  // damit auch nachträgliche Backfills für älteren Bestand mit ab.
+  try {
+    await categorizeUserTransactions(serviceClient, connection.user_id);
+  } catch (err) {
+    console.error("[bank-sync] Kategorisierung fehlgeschlagen:", err instanceof Error ? err.message : err);
+  }
 
   return { imported, accounts: accounts?.length ?? 0 };
 }

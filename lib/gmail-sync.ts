@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { refreshAccessToken } from "@/lib/google-oauth";
 import { listCandidateMessageIds, getMessageDetail } from "@/lib/gmail";
 import { extractInvoiceFromEmail } from "@/lib/gemini";
+import { categorizeUserTransactions } from "@/lib/categorize";
 
 export type GmailConnectionRow = {
   user_id: string;
@@ -74,6 +75,12 @@ export async function syncGmailForConnection(
       p_expires_at: connection.access_token_expires_at,
       p_status: "connected",
     });
+  }
+
+  try {
+    await categorizeUserTransactions(serviceClient, connection.user_id);
+  } catch (err) {
+    console.error("[gmail-sync] Kategorisierung fehlgeschlagen:", err instanceof Error ? err.message : err);
   }
 
   return { scanned: ids.length, imported: rows.length };

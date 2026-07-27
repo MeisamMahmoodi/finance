@@ -55,5 +55,22 @@ export default async function DashboardPage() {
         ? []
         : demoInsights;
 
-  return <DashboardShell transactions={transactions} insights={insights} />;
+  const { data: settings } = await supabase
+    .from("user_settings")
+    .select("monthly_income")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  // Ohne echte Verbindung bleiben wir bei der Demo-Zahl (3200), damit die
+  // Startseite vor dem ersten Connect nicht leer/kaputt wirkt.
+  const monthlyIncome = hasRealConnection ? (settings?.monthly_income ?? 0) : 3200;
+
+  return (
+    <DashboardShell
+      transactions={transactions}
+      insights={insights}
+      monthlyIncome={monthlyIncome}
+      hasIncomeSet={Boolean(settings)}
+    />
+  );
 }

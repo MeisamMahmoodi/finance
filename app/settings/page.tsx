@@ -4,6 +4,8 @@ import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/logout-button";
 import { GmailSyncButton } from "@/components/gmail-sync-button";
 import { BankSyncButton } from "@/components/bank-sync-button";
+import { CategorizeButton } from "@/components/categorize-button";
+import { IncomeInput } from "@/components/income-input";
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   denied: "Google-Zugriff wurde abgelehnt.",
@@ -55,6 +57,15 @@ export default async function SettingsPage({
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const { data: userSettings } = await supabase
+    .from("user_settings")
+    .select("monthly_income")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  const hasAnyConnection =
+    gmailConnection?.status === "connected" || bankConnection?.status === "connected";
 
   return (
     <div className="min-h-dvh max-w-md mx-auto px-4 py-6">
@@ -157,9 +168,26 @@ export default async function SettingsPage({
         {params.bank_connected && (
           <p className="text-success text-xs px-1">Bank verbunden.</p>
         )}
+
+        {hasAnyConnection && (
+          <>
+            <p className="text-muted text-xs px-1 mt-1">
+              Kategorisiert Buchungen nach Essen/Transport/Spaß/etc. und erkennt Abos automatisch.
+            </p>
+            <CategorizeButton />
+          </>
+        )}
       </div>
 
-      <p className="text-xs text-secondary mb-2 mt-6 px-1">Benachrichtigungen</p>
+      <p className="text-xs text-secondary mb-2 px-1">Einnahmen</p>
+      <div className="mb-8">
+        <p className="text-muted text-xs px-1 mb-2">
+          Monatliches Netto-Einkommen (für die Verfügbar-Anzeige — Banken liefern uns nur Ausgaben, keine Gehaltsbuchungen).
+        </p>
+        <IncomeInput initialValue={userSettings?.monthly_income ?? 0} />
+      </div>
+
+      <p className="text-xs text-secondary mb-2 px-1">Benachrichtigungen</p>
       <div className="flex items-center justify-between bg-surface rounded-lg px-3 py-2.5 mb-8">
         <span className="text-sm">Push-Benachrichtigungen</span>
         <span className="text-xs text-muted">kommt in Phase 4</span>

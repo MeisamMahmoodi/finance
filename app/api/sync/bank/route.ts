@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { syncBankConnection, type BankConnectionRow } from "@/lib/bank-sync";
 
+export const maxDuration = 60;
+
 // Manueller Sync-Trigger für den eingeloggten Nutzer (Button in den Einstellungen).
 export async function POST() {
   const supabase = await createClient();
