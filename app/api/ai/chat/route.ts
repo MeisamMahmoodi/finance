@@ -106,6 +106,15 @@ ${contextLines}`;
     role: m.role === "user" ? "user" : "model",
     parts: [{ text: m.content }],
   }));
+  // Gemini verlangt zwingend, dass die history mit role "user" beginnt.
+  // Da wir nur die letzten N Nachrichten laden, kann das Fenster theoretisch
+  // mitten in einem user/assistant-Paar anfangen (z.B. bei ungerader
+  // Gesamtanzahl) - das würde jede Anfrage mit "First content should be with
+  // role 'user', got model" zum Absturz bringen. Führende Nicht-user-
+  // Einträge daher sicherheitshalber abschneiden.
+  while (conversationHistory.length > 0 && conversationHistory[0].role !== "user") {
+    conversationHistory.shift();
+  }
 
   const userParts: Part[] = [];
   if (image) {
