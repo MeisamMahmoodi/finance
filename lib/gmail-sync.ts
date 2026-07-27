@@ -58,9 +58,13 @@ export async function syncGmailForConnection(
   }
 
   if (rows.length > 0) {
-    await serviceClient
+    const { error } = await serviceClient
       .from("transactions")
       .upsert(rows, { onConflict: "user_id,external_id", ignoreDuplicates: true });
+    if (error) {
+      console.error("[gmail-sync] Upsert fehlgeschlagen:", error.message);
+      throw new Error(`transactions upsert fehlgeschlagen: ${error.message}`);
+    }
   }
 
   if (!needsRefresh) {
