@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AiInsight, ChatMessage, PendingReview } from "@/lib/types";
 
 function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
@@ -29,6 +29,8 @@ export function ChatScreen({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages);
   const [reviews, setReviews] = useState<PendingReview[]>(pendingReviews);
+  const [visibleInsights, setVisibleInsights] = useState<AiInsight[]>(insights);
+  const [dismissing, setDismissing] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
@@ -37,6 +39,23 @@ export function ChatScreen({
   );
   const idCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Beim Öffnen des Chat-Tabs und nach jeder neuen Nachricht direkt ans Ende
+  // springen, statt mitten in der (teils langen) Verlaufshistorie zu landen.
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  async function handleDismissInsight(id: string) {
+    setDismissing(id);
+    setVisibleInsights((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await fetch(`/api/insights/${id}/dismiss`, { method: "PATCH" });
+    } finally {
+      setDismissing(null);
+    }
+  }
 
   async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -113,7 +132,7 @@ export function ChatScreen({
     }
   }
 
-  const isEmpty = insights.length === 0 && messages.length === 0 && reviews.length === 0;
+  const isEmpty = visibleInsights.length === 0 && messages.length === 0 && reviews.length === 0;
 
   return (
     <div className="pb-28 min-h-dvh flex flex-col">
@@ -148,10 +167,20 @@ export function ChatScreen({
           </div>
         ))}
 
-        {insights.map((i) => (
+        {visibleInsights.map((i) => (
           <div key={i.id} className="bg-surface rounded-card p-3 flex gap-2.5 items-start">
             <Sparkle />
-            <p className="text-sm leading-relaxed">{i.message}</p>
+            <p className="text-sm leading-relaxed flex-1">{i.message}</p>
+            <button
+              onClick={() => handleDismissInsight(i.id)}
+              disabled={dismissing === i.id}
+              aria-label="Hinweis ausblenden"
+              className="w-6 h-6 rounded-full flex items-center justify-center text-muted shrink-0 disabled:opacity-50"
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
           </div>
         ))}
 
@@ -172,6 +201,7 @@ export function ChatScreen({
             Frag mich etwas zu deinen Ausgaben, oder ich melde mich hier von selbst, sobald mir etwas auffällt.
           </p>
         )}
+        <div ref={bottomRef} />
       </div>
 
       {pendingImage && (
