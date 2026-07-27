@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { demoConnections } from "@/lib/demo-data";
 import { LogoutButton } from "@/components/logout-button";
 import { GmailSyncButton } from "@/components/gmail-sync-button";
+import { BankSyncButton } from "@/components/bank-sync-button";
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   denied: "Google-Zugriff wurde abgelehnt.",
@@ -14,10 +14,22 @@ const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   exchange_failed: "Verbindung mit Google fehlgeschlagen.",
 };
 
+const BANK_ERROR_MESSAGES: Record<string, string> = {
+  denied: "Bank-Zugriff wurde abgelehnt.",
+  state_mismatch: "Sicherheitsprüfung fehlgeschlagen, bitte nochmal versuchen.",
+  save_failed: "Verbindung konnte nicht gespeichert werden.",
+  exchange_failed: "Verbindung mit der Bank fehlgeschlagen.",
+};
+
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ gmail_connected?: string; gmail_error?: string }>;
+  searchParams: Promise<{
+    gmail_connected?: string;
+    gmail_error?: string;
+    bank_connected?: string;
+    bank_error?: string;
+  }>;
 }) {
   const params = await searchParams;
   const supabase = await createClient();
@@ -35,15 +47,14 @@ export default async function SettingsPage({
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const { data: connData } = await supabase
-    .from("connections")
-    .select("*")
-    .order("created_at", { ascending: true });
-
-  const bankConnections =
-    connData && connData.length > 0
-      ? connData
-      : demoConnections.filter((c) => c.type === "bank");
+  const { data: bankConnection } = await supabase
+    .from("bank_connections")
+    .select("aspsp_name, status, last_synced_at")
+    .eq("user_id", user.id)
+    .eq("status", "connected")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   return (
     <div className="min-h-dvh max-w-md mx-auto px-4 py-6">
@@ -107,21 +118,45 @@ export default async function SettingsPage({
           <p className="text-success text-xs px-1">Gmail verbunden.</p>
         )}
 
-        {bankConnections.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-3 bg-surface rounded-lg px-3 py-2.5"
+        <div className="flex items-center gap-3 bg-surface rounded-lg px-3 py-2.5">
+          <span className="text-sm flex-1">
+            {bankConnection?.aspsp_name ?? "Bankkonto"}
+          </span>
+          <span
+            className={`text-xs ${
+              bankConnection?.status === "connected" ? "text-success" : "text-muted"
+            }`}
           >
-            <span className="text-sm flex-1">{c.label}</span>
-            <span
-              className={`text-xs ${
-                c.status === "connected" ? "text-success" : "text-muted"
-              }`}
-            >
-              {c.status === "connected" ? "verbunden" : "nicht verbunden"}
-            </span>
-          </div>
-        ))}
+            {bankConnection?.status === "connected" ? "verbunden" : "nicht verbunden"}
+          </span>
+        </div>
+
+        {bankConnection?.status === "connected" ? (
+          <>
+            <p className="text-muted text-xs px-1">
+              {bankConnection.last_synced_at
+                ? `Zuletzt synchronisiert: ${new Date(bankConnection.last_synced_at).toLocaleString("de-DE")}`
+                : "Noch nicht synchronisiert"}
+            </p>
+            <BankSyncButton />
+          </>
+        ) : (
+          <Link
+            href="/bank/connect"
+            className="w-full h-10 rounded-lg bg-accent text-bg text-sm font-medium flex items-center justify-center"
+          >
+            Bank verbinden
+          </Link>
+        )}
+
+        {params.bank_error && (
+          <p className="text-danger text-xs px-1">
+            {BANK_ERROR_MESSAGES[params.bank_error] ?? "Etwas ist schiefgelaufen."}
+          </p>
+        )}
+        {params.bank_connected && (
+          <p className="text-success text-xs px-1">Bank verbunden.</p>
+        )}
       </div>
 
       <p className="text-xs text-secondary mb-2 mt-6 px-1">Benachrichtigungen</p>
