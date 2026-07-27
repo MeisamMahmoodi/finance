@@ -6,6 +6,7 @@ import { GmailSyncButton } from "@/components/gmail-sync-button";
 import { BankSyncButton } from "@/components/bank-sync-button";
 import { CategorizeButton } from "@/components/categorize-button";
 import { IncomeInput } from "@/components/income-input";
+import { DisconnectButton } from "@/components/disconnect-button";
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   denied: "Google-Zugriff wurde abgelehnt.",
@@ -73,7 +74,12 @@ export function SettingsScreen({
                 ? `Zuletzt synchronisiert: ${new Date(gmailConnection.last_synced_at).toLocaleString("de-DE")}`
                 : "Noch nicht synchronisiert"}
             </p>
-            <GmailSyncButton />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <GmailSyncButton />
+              </div>
+              <DisconnectButton url="/api/gmail/connection" />
+            </div>
           </>
         ) : (
           <a
@@ -103,7 +109,12 @@ export function SettingsScreen({
                 ? `Zuletzt synchronisiert: ${new Date(c.last_synced_at).toLocaleString("de-DE")}`
                 : "Noch nicht synchronisiert"}
             </p>
-            <BankSyncButton connectionId={c.id} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <BankSyncButton connectionId={c.id} />
+              </div>
+              <DisconnectButton url={`/api/bank/connections/${c.id}`} />
+            </div>
           </div>
         ))}
 

@@ -3,6 +3,19 @@
 import { useRef, useState } from "react";
 import type { AiInsight, ChatMessage, PendingReview } from "@/lib/types";
 
+function fileToBase64(file: File): Promise<{ data: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const commaIdx = result.indexOf(",");
+      resolve({ data: result.slice(commaIdx + 1), mimeType: file.type || "image/jpeg" });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ChatScreen({
   insights,
   pendingReviews,
@@ -19,19 +32,33 @@ export function ChatScreen({
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [answering, setAnswering] = useState<string | null>(null);
+  const [pendingImage, setPendingImage] = useState<{ data: string; mimeType: string; previewUrl: string } | null>(
+    null,
+  );
   const idCounter = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePickImage(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const { data, mimeType } = await fileToBase64(file);
+    setPendingImage({ data, mimeType, previewUrl: URL.createObjectURL(file) });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || sending) return;
+    const image = pendingImage;
+    if ((!text && !image) || sending) return;
     setInput("");
+    setPendingImage(null);
     setSending(true);
 
     const userMsg: ChatMessage = {
       id: `local-${idCounter.current++}`,
       role: "user",
-      content: text,
+      content: text || (image ? "📷 Foto gesendet" : ""),
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, userMsg]);
@@ -40,7 +67,10 @@ export function ChatScreen({
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+          image: image ? { data: image.data, mimeType: image.mimeType } : undefined,
+        }),
       });
       const data = await res.json();
       setMessages((prev) => [
@@ -52,6 +82,7 @@ export function ChatScreen({
           created_at: new Date().toISOString(),
         },
       ]);
+      onRefresh();
     } catch {
       setMessages((prev) => [
         ...prev,
@@ -143,11 +174,50 @@ export function ChatScreen({
         )}
       </div>
 
+      {pendingImage && (
+        <div className="px-4 mt-3 flex items-center gap-2">
+          <div className="relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={pendingImage.previewUrl} alt="Beleg" className="w-14 h-14 rounded-lg object-cover border border-border" />
+            <button
+              type="button"
+              onClick={() => setPendingImage(null)}
+              aria-label="Foto entfernen"
+              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-bg border border-border flex items-center justify-center"
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-muted text-xs">Beleg/Rechnung wird beim Senden ausgelesen</p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="flex gap-2 px-4 mt-3">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handlePickImage}
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          aria-label="Foto anhängen"
+          className="w-11 h-11 rounded-full bg-surface border border-border flex items-center justify-center shrink-0 transition-transform active:scale-90"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <path d="M17 8l-5-5-5 5" />
+            <path d="M12 3v13" />
+          </svg>
+        </button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Frag etwas zu deinen Ausgaben..."
+          placeholder={pendingImage ? "Kommentar zum Foto (optional)..." : "Frag etwas zu deinen Ausgaben..."}
           className="flex-1 h-11 rounded-full bg-surface border border-border px-4 text-sm outline-none focus:border-accent"
         />
         <button

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { DebtCard } from "@/components/debt-card";
 import { AddDebtForm } from "@/components/add-debt-form";
+import { AddInvoiceForm } from "@/components/add-invoice-form";
 import type { Debt } from "@/lib/types";
 
 const currencyFormat = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
@@ -25,9 +26,20 @@ export function DebtsShell({ debts, onChanged }: { debts: Debt[]; onChanged: () 
   const [period, setPeriod] = useState<Period>("monthly");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [showForm, setShowForm] = useState(false);
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const subscriptions = debts.filter((d) => d.kind === "subscription");
   const loans = debts.filter((d) => d.kind === "loan");
+  const invoices = debts.filter((d) => d.kind === "invoice");
+
+  const tags = useMemo(() => {
+    const set = new Set<string>();
+    for (const inv of invoices) if (inv.tag) set.add(inv.tag);
+    return [...set];
+  }, [invoices]);
+
+  const visibleInvoices = activeTag ? invoices.filter((inv) => inv.tag === activeTag) : invoices;
 
   const totalDue = useMemo(() => {
     const horizon = Date.now() + PERIOD_DAYS[period] * 86_400_000;
@@ -94,6 +106,61 @@ export function DebtsShell({ debts, onChanged }: { debts: Debt[]; onChanged: () 
         </div>
       )}
 
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-xs text-secondary">Rechnungen</p>
+          <button
+            onClick={() => setShowInvoiceForm((v) => !v)}
+            className="text-xs text-secondary px-2 py-1 rounded-full border border-border transition-transform active:scale-95"
+          >
+            {showInvoiceForm ? "Abbrechen" : "+ Rechnung"}
+          </button>
+        </div>
+
+        {tags.length > 0 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1">
+            <button
+              onClick={() => setActiveTag(null)}
+              className={`shrink-0 px-3 h-7 rounded-full text-xs ${
+                activeTag === null ? "bg-accent text-bg" : "bg-surface border border-border text-secondary"
+              }`}
+            >
+              Alle
+            </button>
+            {tags.map((tag) => (
+              <button
+                key={tag}
+                onClick={() => setActiveTag(tag)}
+                className={`shrink-0 px-3 h-7 rounded-full text-xs ${
+                  activeTag === tag ? "bg-accent text-bg" : "bg-surface border border-border text-secondary"
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {showInvoiceForm && (
+          <AddInvoiceForm
+            onDone={() => {
+              setShowInvoiceForm(false);
+              onChanged();
+            }}
+          />
+        )}
+
+        <div className="flex flex-col gap-2">
+          {visibleInvoices.map((d) => (
+            <DebtCard key={d.id} debt={d} onChanged={onChanged} />
+          ))}
+        </div>
+
+        {invoices.length === 0 && !showInvoiceForm && (
+          <p className="text-muted text-sm py-2 px-1">Noch keine Rechnungen erfasst.</p>
+        )}
+      </div>
+
       {debts.length === 0 && !showForm && (
         <p className="text-muted text-sm text-center py-4">
           Noch keine Debts. Verträge/Abos erkennt die KI automatisch beim Synchronisieren, oder leg manuell einen Kredit/eine Rate an.
@@ -112,7 +179,7 @@ export function DebtsShell({ debts, onChanged }: { debts: Debt[]; onChanged: () 
           onClick={() => setShowForm(true)}
           className="h-11 rounded-lg border border-dashed border-border text-secondary text-sm transition-transform active:scale-[0.98]"
         >
-          + Debt manuell hinzufügen
+          + Kredit/Rate manuell hinzufügen
         </button>
       )}
     </div>

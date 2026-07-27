@@ -20,6 +20,71 @@ export function DebtCard({ debt, onChanged }: { debt: Debt; onChanged: () => voi
     }
   }
 
+  async function remove() {
+    setLoading(true);
+    try {
+      await fetch(`/api/debts/${debt.id}`, { method: "DELETE" });
+      onChanged();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Rechnungen: frei kategorisierbar (eigener Tag), einfacher bezahlt/offen-
+  // Status statt Ratenfortschritt.
+  if (debt.kind === "invoice") {
+    const paid = debt.amount_paid >= debt.total_amount;
+    const overdue = !paid && debt.next_due_date ? new Date(debt.next_due_date).getTime() < Date.now() : false;
+    return (
+      <div className="bg-surface rounded-card p-4 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-full bg-bg border border-border flex items-center justify-center shrink-0">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#111113" strokeWidth="2">
+              <path d="M6 2h9l3 3v17H6z" />
+              <path d="M9 8h6M9 12h6M9 16h4" />
+            </svg>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{debt.name}</p>
+            <p className={`text-xs ${overdue ? "text-danger" : "text-muted"}`}>
+              {debt.tag && <span className="px-1.5 py-0.5 rounded-full bg-bg border border-border mr-1">{debt.tag}</span>}
+              {paid
+                ? "bezahlt"
+                : debt.next_due_date
+                  ? `${overdue ? "überfällig seit" : "fällig"} ${dateFormat.format(new Date(debt.next_due_date))}`
+                  : "offen"}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="text-sm font-medium">{currencyFormat.format(debt.total_amount)}</span>
+          {!paid && (
+            <button
+              onClick={markPaid}
+              disabled={loading}
+              aria-label="Als bezahlt markieren"
+              className="w-7 h-7 rounded-full border border-border flex items-center justify-center transition-transform active:scale-90 disabled:opacity-50"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#111113" strokeWidth="2.5">
+                <path d="M5 13l4 4L19 7" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={remove}
+            disabled={loading}
+            aria-label="Löschen"
+            className="w-7 h-7 rounded-full border border-border flex items-center justify-center text-muted transition-transform active:scale-90 disabled:opacity-50"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Abos/Verträge (von der KI automatisch erkannt) haben keinen sinnvollen
   // Rate-Fortschritt - hier reicht eine schlichte Kosten-Zeile statt Gauge.
   if (debt.kind === "subscription") {

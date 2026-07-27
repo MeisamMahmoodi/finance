@@ -16,6 +16,8 @@ export async function POST(request: Request) {
   const totalAmount = Number(body?.total_amount);
   const installmentsTotal = Number(body?.installments_total) || 1;
   const nextDueDate = typeof body?.next_due_date === "string" ? body.next_due_date : null;
+  const kind = body?.kind === "invoice" ? "invoice" : "loan";
+  const tag = typeof body?.tag === "string" && body.tag.trim() ? body.tag.trim() : null;
 
   if (!name || !Number.isFinite(totalAmount) || totalAmount <= 0) {
     return NextResponse.json({ error: "Name und Gesamtbetrag erforderlich" }, { status: 400 });
@@ -27,6 +29,8 @@ export async function POST(request: Request) {
     total_amount: totalAmount,
     installments_total: Math.max(1, Math.round(installmentsTotal)),
     next_due_date: nextDueDate,
+    kind,
+    tag,
   });
 
   if (error) {

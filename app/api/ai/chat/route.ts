@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Content, type Part } from "@google/generative-ai";
 import { createClient } from "@/lib/supabase/server";
 import { computeCategoryBreakdown, computeMonthlyFixed, predictNextMonthTotal } from "@/lib/stats";
+import { AI_TOOLS, executeAiTool } from "@/lib/ai-tools";
 import type { Transaction } from "@/lib/types";
 
 const currencyFormat = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+const MAX_TOOL_ROUNDS = 6;
 
 let client: GoogleGenerativeAI | null = null;
 function getClient() {
@@ -12,8 +14,12 @@ function getClient() {
   return client;
 }
 
-// Echter Chat-Assistent: bekommt die Ausgaben/Debts des Nutzers als Kontext
-// und beantwortet Fragen dazu (z.B. "wie viel hab ich für Essen ausgegeben").
+// Echter Chat-Assistent mit Function-Calling: bekommt die Ausgaben/Debts des
+// Nutzers als Kontext UND echte Werkzeuge (lib/ai-tools.ts), mit denen er
+// Transaktionen/Debts lesen, anlegen, ändern, löschen und offene Rückfragen
+// direkt im Gespräch auflösen kann - nicht nur darüber reden. Unterstützt
+// zusätzlich ein optionales Foto (Beleg/Rechnung), das Gemini multimodal
+// ausliest und daraufhin selbst über die Tools einträgt.
 export async function POST(request: Request) {
   const supabase = await createClient();
   const {
@@ -26,8 +32,13 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const message = typeof body?.message === "string" ? body.message.trim() : "";
-  if (!message) {
-    return NextResponse.json({ error: "Nachricht fehlt" }, { status: 400 });
+  const image =
+    body?.image && typeof body.image.data === "string" && typeof body.image.mimeType === "string"
+      ? (body.image as { data: string; mimeType: string })
+      : null;
+
+  if (!message && !image) {
+    return NextResponse.json({ error: "Nachricht oder Foto fehlt" }, { status: 400 });
   }
 
   const [{ data: txData }, { data: debts }, { data: history }] = await Promise.all([
@@ -50,45 +61,80 @@ export async function POST(request: Request) {
     prediction !== null ? `Prognose nächster Monat (Gesamtausgaben): ${currencyFormat.format(prediction)}` : null,
     "Ausgaben diesen Monat nach Kategorie:",
     ...categoryTotals.map((c) => `  ${c.category}: ${currencyFormat.format(c.total)}`),
-    "Verträge/Abos (Debts):",
+    "Verträge/Abos/Rechnungen (Debts):",
     ...(debts ?? []).map(
       (d) =>
-        `  ${d.name}: ${currencyFormat.format(d.total_amount)}${d.kind === "loan" ? ` (${d.installments_paid}/${d.installments_total} Raten bezahlt)` : " (Abo)"}`,
+        `  [${d.id}] ${d.name}: ${currencyFormat.format(d.total_amount)}${
+          d.kind === "loan"
+            ? ` (Kredit, ${d.installments_paid}/${d.installments_total} Raten bezahlt)`
+            : d.kind === "invoice"
+              ? ` (Rechnung${d.tag ? `, ${d.tag}` : ""}${d.amount_paid >= d.total_amount ? ", bezahlt" : ", offen"})`
+              : " (Abo)"
+        }`,
     ),
     "Letzte Buchungen:",
     ...transactions
       .slice(-15)
       .reverse()
-      .map((t) => `  ${new Date(t.charged_at).toLocaleDateString("de-DE")} ${t.vendor}: ${currencyFormat.format(t.amount)} (${t.category ?? "unkategorisiert"})`),
+      .map(
+        (t) =>
+          `  [${t.id}] ${new Date(t.charged_at).toLocaleDateString("de-DE")} ${t.vendor}: ${currencyFormat.format(t.amount)} (${t.category ?? "unkategorisiert"})`,
+      ),
   ]
     .filter(Boolean)
     .join("\n");
 
-  const conversation = (history ?? [])
-    .map((m) => `${m.role === "user" ? "Nutzer" : "Assistent"}: ${m.content}`)
-    .join("\n");
+  const systemInstruction = `Du bist ein persönlicher Finanz-Assistent in einer privaten Finance-App. Antworte kurz, konkret und auf Deutsch. Erfinde keine Zahlen, die nicht aus den echten Daten oder Tool-Ergebnissen hervorgehen.
 
-  const prompt = `Du bist ein persönlicher Finanz-Assistent in einer privaten Finance-App. Antworte kurz, konkret und auf Deutsch. Nutze die folgenden echten Finanzdaten des Nutzers als Grundlage für deine Antwort. Erfinde keine Zahlen, die nicht aus den Daten hervorgehen.
+Du hast über Funktionen echten Zugriff auf das gesamte System: Transaktionen und Debts (Kredite, Abos, Rechnungen) auflisten, anlegen, ändern, löschen, sowie offene KI-Rückfragen ("ist X ein Vertrag?") direkt beantworten. Nutze diese Funktionen aktiv und ohne lange nachzufragen, wenn der Nutzer das erkennbar möchte - z.B. "lösch die Amazon-Buchung", "trag 20€ Tanken für heute ein", "markier die Zahnarzt-Rechnung als bezahlt", "sortier meine Rechnungen nach Kategorie", "ist die Klarna-Rückfrage noch offen?". Bekommst du ein Foto eines Belegs/einer Rechnung, lies Empfänger, Betrag, Datum/Fälligkeit und Kategorie heraus und trage es selbstständig über create_transaction (bereits bezahlter Kauf) oder create_invoice (offene Rechnung mit Fälligkeitsdatum) ein - frag danach kurz nach, ob es so passt, statt lange zu erklären was du tust.
 
-Finanzdaten:
-${contextLines}
+Aktuelle Finanzdaten (IDs in eckigen Klammern kannst du für update_/delete_-Aufrufe verwenden):
+${contextLines}`;
 
-${conversation ? `Bisheriger Chat-Verlauf:\n${conversation}\n` : ""}
-Neue Nutzerfrage: ${message}
+  const conversationHistory: Content[] = (history ?? []).map((m) => ({
+    role: m.role === "user" ? "user" : "model",
+    parts: [{ text: m.content }],
+  }));
 
-Antworte direkt, ohne die Frage zu wiederholen.`;
+  const userParts: Part[] = [];
+  if (image) {
+    userParts.push({ inlineData: { mimeType: image.mimeType, data: image.data } });
+  }
+  userParts.push({
+    text: message || "Lies das angehängte Foto (Beleg/Rechnung) aus und trage es passend ein.",
+  });
 
   let reply = "Entschuldigung, ich konnte gerade nicht antworten.";
   try {
-    const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite" });
-    const result = await model.generateContent(prompt);
+    const model = getClient().getGenerativeModel({
+      model: "gemini-3.1-flash-lite",
+      tools: AI_TOOLS,
+      systemInstruction,
+    });
+    const chat = model.startChat({ history: conversationHistory });
+
+    let result = await chat.sendMessage(userParts);
+    let calls = result.response.functionCalls();
+    let round = 0;
+
+    while (calls && calls.length > 0 && round < MAX_TOOL_ROUNDS) {
+      round++;
+      const responseParts: Part[] = [];
+      for (const call of calls) {
+        const output = await executeAiTool(supabase, user.id, call.name, (call.args ?? {}) as Record<string, unknown>);
+        responseParts.push({ functionResponse: { name: call.name, response: output as object } });
+      }
+      result = await chat.sendMessage(responseParts);
+      calls = result.response.functionCalls();
+    }
+
     reply = result.response.text().trim() || reply;
   } catch (err) {
     console.error("[ai-chat] Gemini-Anfrage fehlgeschlagen:", err instanceof Error ? err.message : err);
   }
 
   await supabase.from("chat_messages").insert([
-    { user_id: user.id, role: "user", content: message },
+    { user_id: user.id, role: "user", content: message || "[Foto gesendet]" },
     { user_id: user.id, role: "assistant", content: reply },
   ]);
 

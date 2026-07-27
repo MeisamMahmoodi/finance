@@ -32,9 +32,10 @@ export type Debt = {
   installments_total: number;
   installments_paid: number;
   next_due_date: string | null;
-  kind: "loan" | "subscription";
+  kind: "loan" | "subscription" | "invoice";
   monthly_amount: number | null;
   vendor_key: string | null;
+  tag: string | null;
 };
 
 export type PendingReview = {
