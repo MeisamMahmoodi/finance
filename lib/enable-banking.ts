@@ -118,7 +118,8 @@ export async function listTransactions(
   opts: { dateFrom?: string; continuationKey?: string; strategy?: string } = {},
 ): Promise<{ transactions: EbTransaction[]; continuation_key?: string }> {
   const params = new URLSearchParams();
-  if (opts.dateFrom) params.set("date_from", opts.dateFrom);
+  // Enable Banking verlangt ein reines Datum (YYYY-MM-DD, Uhrzeit=0), keinen vollen Zeitstempel.
+  if (opts.dateFrom) params.set("date_from", opts.dateFrom.slice(0, 10));
   if (opts.continuationKey) params.set("continuation_key", opts.continuationKey);
   if (opts.strategy) params.set("strategy", opts.strategy);
   const qs = params.toString();
