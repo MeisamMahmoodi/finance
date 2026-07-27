@@ -65,12 +65,36 @@ export default async function DashboardPage() {
   // Startseite vor dem ersten Connect nicht leer/kaputt wirkt.
   const monthlyIncome = hasRealConnection ? (settings?.monthly_income ?? 0) : 3200;
 
+  // Echter Kontostand (Summe aller verbundenen Konten) statt Einnahmen-
+  // minus-Fixkosten-Schätzung, sobald die Bank mindestens einmal
+  // synchronisiert wurde.
+  const { data: accountBalances } = await supabase
+    .from("bank_accounts")
+    .select("balance, balance_updated_at")
+    .eq("user_id", user.id)
+    .not("balance", "is", null);
+
+  const realBalance =
+    accountBalances && accountBalances.length > 0
+      ? accountBalances.reduce((sum, a) => sum + Number(a.balance), 0)
+      : null;
+  const balanceUpdatedAt =
+    accountBalances && accountBalances.length > 0
+      ? accountBalances
+          .map((a) => a.balance_updated_at)
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null
+      : null;
+
   return (
     <DashboardShell
       transactions={transactions}
       insights={insights}
       monthlyIncome={monthlyIncome}
       hasIncomeSet={Boolean(settings)}
+      realBalance={realBalance}
+      balanceUpdatedAt={balanceUpdatedAt}
     />
   );
 }

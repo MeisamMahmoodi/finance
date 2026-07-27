@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { listTransactions, type EbTransaction } from "@/lib/enable-banking";
+import { listTransactions, getAccountBalance, type EbTransaction } from "@/lib/enable-banking";
 import { categorizeUserTransactions } from "@/lib/categorize";
 
 export type BankConnectionRow = {
@@ -66,6 +66,20 @@ export async function syncBankAccount(
       console.error("[bank-sync] Upsert fehlgeschlagen:", error.message);
       throw new Error(`transactions upsert fehlgeschlagen: ${error.message}`);
     }
+  }
+
+  // Echten Kontostand mitziehen, damit "Verfügbar" im Dashboard den
+  // tatsächlichen Saldo zeigt statt einer Einnahmen-minus-Fixkosten-Schätzung.
+  try {
+    const balance = await getAccountBalance(account.account_uid);
+    if (balance !== null) {
+      await serviceClient
+        .from("bank_accounts")
+        .update({ balance, balance_updated_at: new Date().toISOString() })
+        .eq("id", account.id);
+    }
+  } catch (err) {
+    console.error("[bank-sync] Kontostand-Abruf fehlgeschlagen:", err instanceof Error ? err.message : err);
   }
 
   return { imported: rows.length };

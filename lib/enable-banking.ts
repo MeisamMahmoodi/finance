@@ -113,6 +113,31 @@ export type EbTransaction = {
   credit_debit_indicator: "CRDT" | "DBIT";
 };
 
+export type EbBalance = {
+  name?: string;
+  balance_amount: { amount: string; currency: string };
+  balance_type: string;
+  reference_date?: string;
+};
+
+// Bevorzugte Reihenfolge, welcher Balance-Typ als "aktueller Kontostand"
+// gilt, falls die Bank mehrere zurückgibt (siehe Enable-Banking-Doku
+// BalanceStatus: XPCD = Instant/Expected, CLAV = Closing Available,
+// CLBD = Closing Booked).
+const BALANCE_TYPE_PRIORITY = ["XPCD", "CLAV", "ITAV", "CLBD", "ITBD"];
+
+export async function getAccountBalance(accountUid: string): Promise<number | null> {
+  const data = await ebFetch(`/accounts/${accountUid}/balances`);
+  const balances = (data.balances ?? []) as EbBalance[];
+  if (balances.length === 0) return null;
+
+  for (const type of BALANCE_TYPE_PRIORITY) {
+    const match = balances.find((b) => b.balance_type === type);
+    if (match) return parseFloat(match.balance_amount.amount);
+  }
+  return parseFloat(balances[0].balance_amount.amount);
+}
+
 export async function listTransactions(
   accountUid: string,
   opts: { dateFrom?: string; continuationKey?: string; strategy?: string } = {},

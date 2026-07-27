@@ -10,16 +10,20 @@ export function Tacho({
   available,
   income,
   fixed,
+  isRealBalance = false,
 }: {
   available: number;
   income: number;
   fixed: number;
+  isRealBalance?: boolean;
 }) {
   const month = monthFormat.format(new Date());
 
   return (
     <div className="flex flex-col items-center py-8">
-      <p className="text-secondary text-xs mb-1">Verfügbar · {month}</p>
+      <p className="text-secondary text-xs mb-1">
+        {isRealBalance ? "Kontostand" : `Verfügbar · ${month}`}
+      </p>
       <p className="text-[44px] leading-none font-medium tracking-tight">
         {currencyFormat.format(available)}
       </p>

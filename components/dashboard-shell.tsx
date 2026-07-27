@@ -11,15 +11,21 @@ export function DashboardShell({
   insights,
   monthlyIncome,
   hasIncomeSet,
+  realBalance,
+  balanceUpdatedAt,
 }: {
   transactions: Transaction[];
   insights: AiInsight[];
   monthlyIncome: number;
   hasIncomeSet: boolean;
+  realBalance: number | null;
+  balanceUpdatedAt: string | null;
 }) {
   const fixed = computeMonthlyFixed(transactions);
   const income = monthlyIncome;
-  const available = income - fixed;
+  // Echter Kontostand hat Vorrang vor der Einnahmen-minus-Fixkosten-Schätzung,
+  // sobald mindestens einmal ein Saldo von der Bank abgerufen wurde.
+  const available = realBalance !== null ? realBalance : income - fixed;
   const categoryTotals = computeCategoryBreakdown(transactions);
   const prediction = predictNextMonthTotal(transactions);
 
@@ -31,7 +37,17 @@ export function DashboardShell({
           <Timeline transactions={transactions} />
         </div>
         <div className="order-1 md:order-2 px-4 md:px-0 md:sticky md:top-6 md:self-start flex flex-col gap-6">
-          <Tacho available={available} income={income} fixed={fixed} />
+          <Tacho
+            available={available}
+            income={income}
+            fixed={fixed}
+            isRealBalance={realBalance !== null}
+          />
+          {realBalance !== null && balanceUpdatedAt && (
+            <p className="text-muted text-xs -mt-4 px-1">
+              Kontostand vom {new Date(balanceUpdatedAt).toLocaleString("de-DE")}
+            </p>
+          )}
           {!hasIncomeSet && (
             <p className="text-muted text-xs -mt-4 px-1">
               Einnahmen noch nicht hinterlegt — in den Einstellungen eintragen.
