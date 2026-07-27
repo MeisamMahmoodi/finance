@@ -28,7 +28,8 @@ export default async function BankConnectPage({
   let loadError = false;
   try {
     banks = await listAspsps("DE");
-  } catch {
+  } catch (err) {
+    console.error("[enable-banking] listAspsps fehlgeschlagen:", err instanceof Error ? err.message : err);
     loadError = true;
   }
 
