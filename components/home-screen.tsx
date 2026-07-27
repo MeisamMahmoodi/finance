@@ -10,10 +10,13 @@ import { AddTransactionForm } from "@/components/add-transaction-form";
 import { computeMonthlyFixed, computeCategoryBreakdown, predictNextMonthTotal } from "@/lib/stats";
 import type { AppData } from "@/lib/app-data";
 
+// Jeder Cent zählt - immer mit 2 Nachkommastellen, nicht gerundet auf ganze
+// Euro (vorher zeigte "-2,83€" fälschlich als "-3€" an).
 const currencyFormat = new Intl.NumberFormat("de-DE", {
   style: "currency",
   currency: "EUR",
-  maximumFractionDigits: 0,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
 });
 const percentFormat = new Intl.NumberFormat("de-DE", { maximumFractionDigits: 2, signDisplay: "always" });
 
