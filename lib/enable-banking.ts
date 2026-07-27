@@ -129,6 +129,7 @@ const BALANCE_TYPE_PRIORITY = ["XPCD", "CLAV", "ITAV", "CLBD", "ITBD"];
 export async function getAccountBalance(accountUid: string): Promise<number | null> {
   const data = await ebFetch(`/accounts/${accountUid}/balances`);
   const balances = (data.balances ?? []) as EbBalance[];
+  console.log(`[enable-banking] Balances für ${accountUid}:`, JSON.stringify(balances));
   if (balances.length === 0) return null;
 
   for (const type of BALANCE_TYPE_PRIORITY) {
