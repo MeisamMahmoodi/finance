@@ -17,14 +17,14 @@ export function Gauge({ percent, size = 220 }: { percent: number; size?: number 
       <path
         d={arcPath}
         fill="none"
-        stroke="#232326"
+        stroke="#e8e8e9"
         strokeWidth={strokeWidth}
         strokeLinecap="round"
       />
       <path
         d={arcPath}
         fill="none"
-        stroke="#8b8bff"
+        stroke="#111113"
         strokeWidth={strokeWidth}
         strokeLinecap="round"
         strokeDasharray={`${dash} ${circumference}`}

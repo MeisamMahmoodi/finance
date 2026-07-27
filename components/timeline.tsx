@@ -76,7 +76,7 @@ export function Timeline({ transactions }: { transactions: Transaction[] }) {
               </div>
               <span
                 className={`text-sm shrink-0 ${
-                  t.status === "upcoming" ? "text-[#f2f2f2]" : "text-secondary"
+                  t.status === "upcoming" ? "text-ink" : "text-secondary"
                 }`}
               >
                 {t.direction === "in" ? "+" : "−"}

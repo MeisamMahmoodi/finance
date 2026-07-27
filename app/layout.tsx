@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b0b0d",
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -24,9 +24,13 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de" className="dark">
-      <body className="bg-bg text-[#f2f2f2] antialiased">
-        {children}
+    <html lang="de">
+      <body className="bg-bg text-ink antialiased">
+        {/* Reine Handy-PWA: immer im Phone-Format, egal auf welchem Gerät/Fenster
+            geöffnet - kein responsives Desktop-Layout. */}
+        <div className="max-w-[430px] mx-auto min-h-dvh bg-bg relative md:shadow-[0_0_60px_rgba(0,0,0,0.08)]">
+          {children}
+        </div>
         <RegisterSW />
       </body>
     </html>

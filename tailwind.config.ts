@@ -6,14 +6,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        bg: "#0b0b0d",
-        surface: "#1c1c1f",
-        border: "#232326",
-        muted: "#6b6b70",
-        secondary: "#8a8a8e",
-        accent: "#8b8bff",
-        success: "#5dcaa5",
-        danger: "#e2504a",
+        bg: "#ffffff",
+        surface: "#f5f5f6",
+        border: "#e8e8e9",
+        muted: "#9a9a9d",
+        secondary: "#6b6b6f",
+        ink: "#111113",
+        accent: "#111113",
+        success: "#2f9e5b",
+        danger: "#d33f3f",
       },
       borderRadius: {
         card: "12px",

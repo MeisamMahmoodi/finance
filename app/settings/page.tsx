@@ -44,35 +44,31 @@ export default async function SettingsPage({
     redirect("/login");
   }
 
-  const { data: gmailConnection } = await supabase
-    .from("email_connections")
-    .select("email_address, status, last_synced_at")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const { data: bankConnection } = await supabase
-    .from("bank_connections")
-    .select("aspsp_name, status, last_synced_at")
-    .eq("user_id", user.id)
-    .eq("status", "connected")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: userSettings } = await supabase
-    .from("user_settings")
-    .select("monthly_income")
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: gmailConnection }, { data: bankConnection }, { data: userSettings }] = await Promise.all([
+    supabase
+      .from("email_connections")
+      .select("email_address, status, last_synced_at")
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("bank_connections")
+      .select("aspsp_name, status, last_synced_at")
+      .eq("user_id", user.id)
+      .eq("status", "connected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("user_settings").select("monthly_income").eq("user_id", user.id).maybeSingle(),
+  ]);
 
   const hasAnyConnection =
     gmailConnection?.status === "connected" || bankConnection?.status === "connected";
 
   return (
-    <div className="min-h-dvh max-w-md mx-auto px-4 py-6 pb-28">
+    <div className="min-h-dvh px-4 py-6 pb-28">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/" aria-label="Zurück" className="w-9 h-9 rounded-full bg-surface flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e6e6e6" strokeWidth="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111113" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </Link>

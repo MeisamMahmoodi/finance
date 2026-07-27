@@ -14,34 +14,50 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data: txData } = await supabase
-    .from("transactions")
-    .select("*")
-    .order("charged_at", { ascending: true });
-
-  const { data: insightData } = await supabase
-    .from("ai_insights")
-    .select("*")
-    .eq("dismissed", false)
-    .order("created_at", { ascending: false });
+  // Alle unabhängigen Queries parallel abschicken statt nacheinander -
+  // spart mehrere Round-Trips und war der Hauptgrund für die langsamen
+  // Seitenladezeiten.
+  const [
+    { data: txData },
+    { data: insightData },
+    { data: gmailConn },
+    { data: bankConn },
+    { data: settings },
+    { data: accounts },
+    { data: boxesData },
+  ] = await Promise.all([
+    supabase.from("transactions").select("*").order("charged_at", { ascending: true }),
+    supabase
+      .from("ai_insights")
+      .select("*")
+      .eq("dismissed", false)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("email_connections")
+      .select("status")
+      .eq("user_id", user.id)
+      .eq("status", "connected")
+      .maybeSingle(),
+    supabase
+      .from("bank_connections")
+      .select("status, aspsp_name")
+      .eq("user_id", user.id)
+      .eq("status", "connected")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase.from("user_settings").select("monthly_income").eq("user_id", user.id).maybeSingle(),
+    supabase
+      .from("bank_accounts")
+      .select("id, name, iban, balance, balance_updated_at")
+      .eq("user_id", user.id)
+      .not("balance", "is", null),
+    supabase.from("boxes").select("*").order("created_at", { ascending: true }),
+  ]);
 
   // Demo-Daten nur zeigen, solange der Nutzer noch gar keine echte Quelle
   // verbunden hat. Sobald Gmail oder Bank verbunden sind, soll die Startseite
   // den echten (ggf. leeren) Stand zeigen statt Fake-Daten vorzugaukeln.
-  const { data: gmailConn } = await supabase
-    .from("email_connections")
-    .select("status")
-    .eq("user_id", user.id)
-    .eq("status", "connected")
-    .maybeSingle();
-  const { data: bankConn } = await supabase
-    .from("bank_connections")
-    .select("status, aspsp_name")
-    .eq("user_id", user.id)
-    .eq("status", "connected")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
   const hasRealConnection = Boolean(gmailConn || bankConn);
 
   const transactions: Transaction[] =
@@ -57,24 +73,9 @@ export default async function DashboardPage() {
         ? []
         : demoInsights;
 
-  const { data: settings } = await supabase
-    .from("user_settings")
-    .select("monthly_income")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
   // Ohne echte Verbindung bleiben wir bei der Demo-Zahl (3200), damit die
   // Startseite vor dem ersten Connect nicht leer/kaputt wirkt.
   const monthlyIncome = hasRealConnection ? (settings?.monthly_income ?? 0) : 3200;
-
-  // Echte Konten (Summe aller verbundenen Bankkonten) statt Einnahmen-
-  // minus-Fixkosten-Schätzung, sobald die Bank mindestens einmal
-  // synchronisiert wurde.
-  const { data: accounts } = await supabase
-    .from("bank_accounts")
-    .select("id, name, iban, balance, balance_updated_at")
-    .eq("user_id", user.id)
-    .not("balance", "is", null);
 
   const realBalance =
     accounts && accounts.length > 0
@@ -89,7 +90,9 @@ export default async function DashboardPage() {
           .at(-1) ?? null
       : null;
 
-  // Trend: ältester bekannter Saldo der letzten 30 Tage vs. jetzt.
+  // Trend: ältester bekannter Saldo der letzten 30 Tage vs. jetzt. Braucht
+  // die Account-IDs aus der vorigen Abfrage, kann also nicht Teil des
+  // ersten Promise.all sein.
   let balanceChangePercent: number | null = null;
   if (accounts && accounts.length > 0) {
     const accountIds = accounts.map((a) => a.id);
@@ -106,11 +109,6 @@ export default async function DashboardPage() {
       balanceChangePercent = ((realBalance - Number(oldest.balance)) / Math.abs(Number(oldest.balance))) * 100;
     }
   }
-
-  const { data: boxesData } = await supabase
-    .from("boxes")
-    .select("*")
-    .order("created_at", { ascending: true });
 
   return (
     <DashboardShell

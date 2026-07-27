@@ -34,10 +34,10 @@ export default async function BankConnectPage({
   }
 
   return (
-    <div className="min-h-dvh max-w-md mx-auto px-4 py-6">
+    <div className="min-h-dvh px-4 py-6">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/settings" aria-label="Zurück" className="w-9 h-9 rounded-full bg-surface flex items-center justify-center">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e6e6e6" strokeWidth="2">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#111113" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </Link>

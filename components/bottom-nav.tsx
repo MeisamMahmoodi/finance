@@ -31,8 +31,8 @@ export function BottomNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-20 px-4 pb-4 pt-2 pointer-events-none">
-      <div className="max-w-5xl mx-auto flex items-center justify-between pointer-events-auto">
-        <nav className="flex items-center gap-1 bg-surface border border-border rounded-full px-2 py-2 shadow-lg">
+      <div className="max-w-[430px] mx-auto flex items-center justify-between pointer-events-auto">
+        <nav className="flex items-center gap-1 bg-surface border border-border rounded-full px-2 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.06)]">
           {TABS.map((tab) => {
             const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
             const Icon = tab.icon;
@@ -55,7 +55,7 @@ export function BottomNav() {
           onClick={handleSync}
           aria-label="Synchronisieren"
           disabled={syncing}
-          className="w-12 h-12 rounded-full bg-accent text-bg flex items-center justify-center shadow-lg shrink-0 disabled:opacity-60"
+          className="w-12 h-12 rounded-full bg-accent text-bg flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.15)] shrink-0 disabled:opacity-60"
         >
           <SyncIcon spinning={syncing} />
         </button>
@@ -66,7 +66,7 @@ export function BottomNav() {
 
 function HomeIcon({ active }: { active: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#0b0b0d" : "currentColor"} strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#ffffff" : "currentColor"} strokeWidth="2">
       <path d="M3 11l9-8 9 8" />
       <path d="M5 10v10h14V10" />
     </svg>
@@ -75,7 +75,7 @@ function HomeIcon({ active }: { active: boolean }) {
 
 function DebtsIcon({ active }: { active: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#0b0b0d" : "currentColor"} strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#ffffff" : "currentColor"} strokeWidth="2">
       <circle cx="12" cy="12" r="9" />
       <path d="M12 7v5l3 3" />
     </svg>
@@ -84,7 +84,7 @@ function DebtsIcon({ active }: { active: boolean }) {
 
 function ProfileIcon({ active }: { active: boolean }) {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#0b0b0d" : "currentColor"} strokeWidth="2">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={active ? "#ffffff" : "currentColor"} strokeWidth="2">
       <circle cx="12" cy="8" r="4" />
       <path d="M4 20c0-4 3.5-6 8-6s8 2 8 6" />
     </svg>
@@ -98,7 +98,7 @@ function SyncIcon({ spinning }: { spinning: boolean }) {
       height="18"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#0b0b0d"
+      stroke="#ffffff"
       strokeWidth="2"
       className={spinning ? "animate-spin" : ""}
     >

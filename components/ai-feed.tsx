@@ -45,7 +45,7 @@ export function AiFeed({ insights }: { insights: AiInsight[] }) {
           aria-label="Senden"
           className="w-11 h-11 rounded-full bg-accent flex items-center justify-center shrink-0"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0b0b0d" strokeWidth="2.5">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth="2.5">
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>
@@ -62,7 +62,7 @@ function Sparkle() {
       height="16"
       viewBox="0 0 24 24"
       fill="none"
-      stroke="#8b8bff"
+      stroke="#111113"
       strokeWidth="1.8"
       className="mt-0.5 shrink-0"
     >
