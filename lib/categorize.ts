@@ -25,7 +25,7 @@ type TxRow = {
   category: string | null;
 };
 
-function normalizeVendor(vendor: string) {
+export function normalizeVendor(vendor: string) {
   return vendor
     .toLowerCase()
     .replace(/[0-9]/g, "")
@@ -50,6 +50,14 @@ const AMBIGUOUS_PAYMENT_PROCESSORS = ["paypal", "stripe", "adyen", "mollie", "su
 
 function vendorMatches(vendorKey: string, list: string[]) {
   return list.some((kw) => vendorKey.includes(kw));
+}
+
+// Für die UI: Buchungen von BNPL-Diensten (Klarna etc.) bekommen einen
+// "Als Ratenzahlung erfassen"-Schnellzugriff, weil die KI sie nie automatisch
+// als Abo/Vertrag erkennt (siehe oben) - der Nutzer kann sie aber bei Bedarf
+// selbst als Debt eintragen.
+export function isLikelyInstallmentVendor(vendor: string): boolean {
+  return vendorMatches(normalizeVendor(vendor), BNPL_DENYLIST);
 }
 
 // Findet Vendor-Gruppen, deren Zahlungsmuster nach Abo/Vertrag AUSSIEHT
@@ -122,7 +130,7 @@ async function upsertSubscriptionDebt(
 ) {
   const { data: existing } = await serviceClient
     .from("debts")
-    .select("id")
+    .select("id, total_amount")
     .eq("user_id", userId)
     .eq("vendor_key", vendorKey)
     .eq("kind", "subscription")
@@ -138,6 +146,18 @@ async function upsertSubscriptionDebt(
   };
 
   if (existing) {
+    const previousAmount = Number(existing.total_amount);
+    // Preiserhöhung erkannt (>10%, keine Rundungsdifferenz) - proaktiver
+    // Hinweis, statt dass der Nutzer das selbst bemerken muss.
+    if (previousAmount > 0 && amount > previousAmount * 1.1) {
+      const percent = Math.round(((amount - previousAmount) / previousAmount) * 100);
+      await insertInsightOnce(
+        serviceClient,
+        userId,
+        "price_increase",
+        `${vendorLabel} wurde von ${previousAmount.toFixed(2)}€ auf ${amount.toFixed(2)}€ erhöht (+${percent}%).`,
+      );
+    }
     await serviceClient.from("debts").update(payload).eq("id", existing.id);
   } else {
     await serviceClient.from("debts").insert({
@@ -149,6 +169,104 @@ async function upsertSubscriptionDebt(
       installments_paid: 0,
       ...payload,
     });
+  }
+}
+
+// Legt einen proaktiven KI-Hinweis an, aber nur wenn nicht bereits ein
+// identischer, noch nicht verworfener Hinweis existiert - sonst würde jeder
+// Sync denselben Hinweis erneut anlegen.
+async function insertInsightOnce(
+  serviceClient: SupabaseClient,
+  userId: string,
+  kind: string,
+  message: string,
+) {
+  const { data: existing } = await serviceClient
+    .from("ai_insights")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("dismissed", false)
+    .eq("message", message)
+    .maybeSingle();
+  if (existing) return;
+  await serviceClient.from("ai_insights").insert({ user_id: userId, kind, message });
+}
+
+function monthTotal(rows: TxRow[], year: number, month: number) {
+  return rows
+    .filter((t) => {
+      const d = new Date(t.charged_at);
+      return d.getFullYear() === year && d.getMonth() === month;
+    })
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+}
+
+function trailingMonthlyAverage(rows: TxRow[], reference: Date) {
+  const totals: number[] = [];
+  for (let back = 1; back <= 3; back++) {
+    const d = new Date(reference.getFullYear(), reference.getMonth() - back, 1);
+    const total = monthTotal(rows, d.getFullYear(), d.getMonth());
+    if (total > 0) totals.push(total);
+  }
+  if (totals.length === 0) return null;
+  return totals.reduce((a, b) => a + b, 0) / totals.length;
+}
+
+// Proaktive Hinweise, ohne dass der Nutzer danach fragen muss: bald fällige
+// Debts (nächste 5 Tage) und ungewöhnlich hohe Ausgaben diesen Monat
+// (>30% über dem Schnitt der letzten 3 Monate). Läuft bei jedem Sync/Backfill
+// mit und erscheint dann im Chat-Tab.
+async function generateProactiveInsights(serviceClient: SupabaseClient, userId: string, rows: TxRow[]) {
+  const { data: debts } = await serviceClient
+    .from("debts")
+    .select("name, next_due_date, total_amount, monthly_amount, kind")
+    .eq("user_id", userId);
+
+  const now = Date.now();
+  for (const d of debts ?? []) {
+    if (!d.next_due_date) continue;
+    const daysUntil = Math.round((new Date(d.next_due_date).getTime() - now) / 86_400_000);
+    if (daysUntil < 0 || daysUntil > 5) continue;
+
+    const { data: alreadyInformed } = await serviceClient
+      .from("ai_insights")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("dismissed", false)
+      .eq("kind", "due_soon")
+      .ilike("message", `${d.name}%`)
+      .maybeSingle();
+    if (alreadyInformed) continue;
+
+    const amount = Number(d.kind === "subscription" ? (d.monthly_amount ?? d.total_amount) : d.total_amount);
+    const when = daysUntil === 0 ? "heute" : daysUntil === 1 ? "morgen" : `in ${daysUntil} Tagen`;
+    await serviceClient.from("ai_insights").insert({
+      user_id: userId,
+      kind: "due_soon",
+      message: `${d.name} wird ${when} fällig (${amount.toFixed(2)}€).`,
+    });
+  }
+
+  const reference = new Date();
+  const current = monthTotal(rows, reference.getFullYear(), reference.getMonth());
+  const avg = trailingMonthlyAverage(rows, reference);
+  if (avg !== null && avg > 0 && current > avg * 1.3) {
+    const { data: recent } = await serviceClient
+      .from("ai_insights")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("kind", "spending_anomaly")
+      .eq("dismissed", false)
+      .gte("created_at", new Date(now - 20 * 86_400_000).toISOString())
+      .maybeSingle();
+    if (!recent) {
+      const percent = Math.round(((current - avg) / avg) * 100);
+      await serviceClient.from("ai_insights").insert({
+        user_id: userId,
+        kind: "spending_anomaly",
+        message: `Du hast diesen Monat schon ${current.toFixed(2)}€ ausgegeben - das sind ${percent}% mehr als dein Schnitt der letzten 3 Monate (${avg.toFixed(2)}€).`,
+      });
+    }
   }
 }
 
@@ -322,7 +440,28 @@ export async function categorizeUserTransactions(
     .eq("user_id", userId);
   const alreadyReviewed = new Set((existingReviews ?? []).map((r) => r.transaction_id));
 
-  const verdicts = await runClassifyBatches(candidates);
+  // Bereits einmal per Chat beantwortete Empfänger nie wieder per KI fragen -
+  // das ist das "aus Korrekturen lernen": eine gespeicherte Regel gilt sofort
+  // für alle (auch zukünftige) Buchungen desselben Empfängers.
+  const { data: rules } = await serviceClient
+    .from("vendor_rules")
+    .select("vendor_key, decision")
+    .eq("user_id", userId);
+  const ruleMap = new Map((rules ?? []).map((r) => [r.vendor_key, r.decision as "contract" | "not_contract"]));
+
+  const ruledVerdicts: Record<string, "yes" | "no" | "unsure"> = {};
+  const needsAi: typeof candidates = [];
+  for (const candidate of candidates) {
+    const rule = ruleMap.get(normalizeVendor(candidate.vendor));
+    if (rule) {
+      ruledVerdicts[candidate.id] = rule === "contract" ? "yes" : "no";
+    } else {
+      needsAi.push(candidate);
+    }
+  }
+
+  const aiVerdicts = await runClassifyBatches(needsAi);
+  const verdicts = { ...aiVerdicts, ...ruledVerdicts };
 
   const confirmedRecurringIds = new Set<string>();
   let recurringFromAi = 0;
@@ -330,10 +469,13 @@ export async function categorizeUserTransactions(
     let verdict = verdicts[candidate.id];
     const memberIds = candidate.groupIds ?? [candidate.id];
 
-    // Generische Zahlungsdienstleister (PayPal etc.): auch bei "yes" nie
-    // automatisch bestätigen, weil wir den echten Empfänger dahinter nicht
-    // kennen - stattdessen den Nutzer fragen.
-    if (verdict === "yes" && vendorMatches(normalizeVendor(candidate.vendor), AMBIGUOUS_PAYMENT_PROCESSORS)) {
+    // Generische Zahlungsdienstleister (PayPal etc.): eine frische KI-"yes"
+    // Einschätzung wird nie automatisch bestätigt, weil wir den echten
+    // Empfänger dahinter nicht kennen - stattdessen wird nachgefragt. Eine
+    // bereits vom Nutzer per Chat bestätigte Regel (ruledVerdicts) gilt aber
+    // weiterhin, sonst würde die KI trotz expliziter Antwort erneut fragen.
+    const fromRule = candidate.id in ruledVerdicts;
+    if (!fromRule && verdict === "yes" && vendorMatches(normalizeVendor(candidate.vendor), AMBIGUOUS_PAYMENT_PROCESSORS)) {
       verdict = "unsure";
     }
 
@@ -407,6 +549,12 @@ export async function categorizeUserTransactions(
         if (!error) categorized++;
       }),
     );
+  }
+
+  try {
+    await generateProactiveInsights(serviceClient, userId, rows);
+  } catch (err) {
+    console.error("[categorize] Proaktive Hinweise fehlgeschlagen:", err instanceof Error ? err.message : err);
   }
 
   return { categorized, recurring: recurringFromAi };

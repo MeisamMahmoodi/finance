@@ -118,7 +118,7 @@ export function HomeScreen({
         </div>
       )}
       <div className="px-4 mt-2">
-        <Timeline transactions={transactions} showHeading={false} />
+        <Timeline transactions={transactions} showHeading={false} onChanged={onRefresh} />
       </div>
 
       <div className="px-4 mt-4 flex flex-col gap-4">

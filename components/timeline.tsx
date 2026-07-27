@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { isLikelyInstallmentVendor } from "@/lib/categorize";
+import { QuickDebtForm } from "@/components/quick-debt-form";
 import type { Transaction } from "@/lib/types";
 
 const currencyFormat = new Intl.NumberFormat("de-DE", {
@@ -53,11 +55,14 @@ const DEFAULT_VISIBLE = 6;
 export function Timeline({
   transactions,
   showHeading = true,
+  onChanged,
 }: {
   transactions: Transaction[];
   showHeading?: boolean;
+  onChanged?: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [openFormId, setOpenFormId] = useState<string | null>(null);
   const sorted = [...transactions].sort(
     (a, b) => new Date(b.charged_at).getTime() - new Date(a.charged_at).getTime(),
   );
@@ -70,32 +75,53 @@ export function Timeline({
       <div className="flex flex-col gap-1">
         {visible.map((t) => {
           const color = categoryColor(t.category);
+          const showQuickAdd = onChanged && isLikelyInstallmentVendor(t.vendor);
           return (
-            <div
-              key={t.id}
-              className="flex items-center gap-3 py-2.5 px-1 border-b border-border last:border-0"
-            >
-              <div
-                className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium shrink-0"
-                style={{ backgroundColor: `${color}26`, color }}
-              >
-                {initials(t.vendor)}
+            <div key={t.id} className="py-2.5 px-1 border-b border-border last:border-0">
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium shrink-0"
+                  style={{ backgroundColor: `${color}26`, color }}
+                >
+                  {initials(t.vendor)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate">{t.vendor}</p>
+                  <p className="text-muted text-xs">
+                    {relativeLabel(t.charged_at)}
+                    {t.category && ` · ${t.category}`}
+                  </p>
+                </div>
+                <span
+                  className={`text-sm shrink-0 ${
+                    t.status === "upcoming" ? "text-ink" : "text-secondary"
+                  }`}
+                >
+                  {t.direction === "in" ? "+" : "−"}
+                  {currencyFormat.format(t.amount)}
+                </span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm truncate">{t.vendor}</p>
-                <p className="text-muted text-xs">
-                  {relativeLabel(t.charged_at)}
-                  {t.category && ` · ${t.category}`}
-                </p>
-              </div>
-              <span
-                className={`text-sm shrink-0 ${
-                  t.status === "upcoming" ? "text-ink" : "text-secondary"
-                }`}
-              >
-                {t.direction === "in" ? "+" : "−"}
-                {currencyFormat.format(t.amount)}
-              </span>
+              {showQuickAdd && openFormId !== t.id && (
+                <button
+                  onClick={() => setOpenFormId(t.id)}
+                  className="mt-1.5 ml-12 text-xs text-secondary underline underline-offset-2"
+                >
+                  Als Ratenzahlung erfassen
+                </button>
+              )}
+              {showQuickAdd && openFormId === t.id && (
+                <div className="ml-12">
+                  <QuickDebtForm
+                    vendor={t.vendor}
+                    amount={Math.abs(t.amount)}
+                    onDone={() => {
+                      setOpenFormId(null);
+                      onChanged?.();
+                    }}
+                    onCancel={() => setOpenFormId(null)}
+                  />
+                </div>
+              )}
             </div>
           );
         })}

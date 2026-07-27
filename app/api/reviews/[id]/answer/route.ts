@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { RECURRING_CATEGORY } from "@/lib/categorize";
+import { RECURRING_CATEGORY, normalizeVendor } from "@/lib/categorize";
 
 // Beantwortet eine unsichere KI-Rückfrage ("ist das ein Vertrag?"): bei "yes"
 // wandert die Buchung in Debts (kind=subscription) und wird als Wiederkehrend
-// kategorisiert, bei "no" bleibt sie wie sie ist.
+// kategorisiert, bei "no" bleibt sie wie sie ist. Die Entscheidung wird pro
+// Empfänger als Regel gespeichert, damit die KI beim nächsten Mal für
+// denselben Empfänger nicht erneut nachfragt, sondern die Antwort merkt.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
@@ -33,18 +35,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Rückfrage nicht gefunden" }, { status: 404 });
   }
 
+  const vendorKey = normalizeVendor(review.vendor);
+
+  await supabase.from("vendor_rules").upsert(
+    { user_id: user.id, vendor_key: vendorKey, decision: answer === "yes" ? "contract" : "not_contract" },
+    { onConflict: "user_id,vendor_key" },
+  );
+
   if (answer === "yes" && review.transaction_id) {
     await supabase
       .from("transactions")
       .update({ category: RECURRING_CATEGORY })
       .eq("id", review.transaction_id);
-
-    const vendorKey = review.vendor
-      .toLowerCase()
-      .replace(/[0-9]/g, "")
-      .replace(/[^a-zäöüß\s]/g, "")
-      .replace(/\s+/g, " ")
-      .trim();
 
     const { data: existingDebt } = await supabase
       .from("debts")
