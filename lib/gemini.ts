@@ -45,8 +45,15 @@ Text: ${email.bodyText}`;
     const result = await model.generateContent(prompt);
     const text = result.response.text();
     const parsed = JSON.parse(text) as ExtractedInvoice;
+    console.log(
+      `[gemini] "${email.subject}" von ${email.from} -> is_invoice=${parsed.is_invoice} amount=${parsed.amount}`,
+    );
     return parsed;
-  } catch {
+  } catch (err) {
+    console.error(
+      `[gemini] Fehler bei "${email.subject}" von ${email.from}:`,
+      err instanceof Error ? err.message : err,
+    );
     return { is_invoice: false };
   }
 }

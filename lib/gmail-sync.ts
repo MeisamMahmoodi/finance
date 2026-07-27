@@ -36,6 +36,7 @@ export async function syncGmailForConnection(
   }
 
   const ids = await listCandidateMessageIds(accessToken!, MAX_MESSAGES_PER_RUN);
+  console.log(`[gmail-sync] ${ids.length} Kandidaten-Mails gefunden für user ${connection.user_id}`);
   const rows = [];
 
   for (const id of ids) {
