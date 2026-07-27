@@ -80,7 +80,7 @@ Antworte direkt, ohne die Frage zu wiederholen.`;
 
   let reply = "Entschuldigung, ich konnte gerade nicht antworten.";
   try {
-    const model = getClient().getGenerativeModel({ model: "gemini-2.5-flash" });
+    const model = getClient().getGenerativeModel({ model: "gemini-3.1-flash-lite" });
     const result = await model.generateContent(prompt);
     reply = result.response.text().trim() || reply;
   } catch (err) {

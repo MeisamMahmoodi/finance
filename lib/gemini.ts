@@ -20,7 +20,7 @@ export async function extractInvoiceFromEmail(
   email: GmailMessage,
 ): Promise<ExtractedInvoice> {
   const model = getClient().getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: "gemini-3.1-flash-lite",
     generationConfig: { responseMimeType: "application/json" },
   });
 

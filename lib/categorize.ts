@@ -34,6 +34,24 @@ function normalizeVendor(vendor: string) {
     .trim();
 }
 
+// BNPL-/Ratenzahlungsdienste taggen jede Einzelbuchung (egal welcher
+// tatsächliche Händler dahintersteckt) mit demselben Empfängernamen. Zwei
+// unterschiedliche Einkäufe können dadurch zufällig denselben Betrag im
+// ~monatlichen Abstand haben (z.B. zwei verschiedene Klarna-Käufe à 26,29€).
+// Das ist Zufall, kein Vertrag - diese Vendors werden daher NIE automatisch
+// als Abo erkannt.
+const BNPL_DENYLIST = ["klarna", "afterpay", "clearpay", "ratepay", "riverty", "billpay", "unzer"];
+
+// Generische Zahlungsdienstleister (PayPal etc.) können ECHTE Abos abwickeln
+// (Netflix/Spotify laufen oft über PayPal) - aber wir sehen nur "PayPal",
+// nicht den echten Händler dahinter. Bei diesen wird ein erkanntes Muster nie
+// automatisch bestätigt, sondern immer als Rückfrage an den Nutzer gestellt.
+const AMBIGUOUS_PAYMENT_PROCESSORS = ["paypal", "stripe", "adyen", "mollie", "sumup"];
+
+function vendorMatches(vendorKey: string, list: string[]) {
+  return list.some((kw) => vendorKey.includes(kw));
+}
+
 // Findet Vendor-Gruppen, deren Zahlungsmuster nach Abo/Vertrag AUSSIEHT
 // (gleicher Empfänger, sehr ähnlicher Betrag, ~monatlicher Abstand). Das ist
 // nur eine Kandidaten-Vorauswahl - ob es wirklich ein Vertrag ist (und kein
@@ -43,7 +61,7 @@ function buildRecurringCandidateGroups(transactions: TxRow[]): Map<string, TxRow
   const byVendor = new Map<string, TxRow[]>();
   for (const tx of transactions) {
     const key = normalizeVendor(tx.vendor);
-    if (!key) continue;
+    if (!key || vendorMatches(key, BNPL_DENYLIST)) continue;
     if (!byVendor.has(key)) byVendor.set(key, []);
     byVendor.get(key)!.push(tx);
   }
@@ -271,7 +289,9 @@ export async function categorizeUserTransactions(
     if (!key) continue;
     vendorCounts.set(key, (vendorCounts.get(key) ?? 0) + 1);
   }
-  const singleOccurrence = uncategorized.filter((t) => !groupedIds.has(t.id));
+  const singleOccurrence = uncategorized.filter(
+    (t) => !groupedIds.has(t.id) && !vendorMatches(normalizeVendor(t.vendor), BNPL_DENYLIST),
+  );
 
   const candidates: (ContractCandidate & { groupIds?: string[] })[] = [];
   for (const [vendorKey, groupRows] of recurringGroups) {
@@ -307,8 +327,15 @@ export async function categorizeUserTransactions(
   const confirmedRecurringIds = new Set<string>();
   let recurringFromAi = 0;
   for (const candidate of candidates) {
-    const verdict = verdicts[candidate.id];
+    let verdict = verdicts[candidate.id];
     const memberIds = candidate.groupIds ?? [candidate.id];
+
+    // Generische Zahlungsdienstleister (PayPal etc.): auch bei "yes" nie
+    // automatisch bestätigen, weil wir den echten Empfänger dahinter nicht
+    // kennen - stattdessen den Nutzer fragen.
+    if (verdict === "yes" && vendorMatches(normalizeVendor(candidate.vendor), AMBIGUOUS_PAYMENT_PROCESSORS)) {
+      verdict = "unsure";
+    }
 
     if (verdict === "yes") {
       const { error } = await serviceClient
