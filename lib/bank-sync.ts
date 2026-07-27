@@ -73,10 +73,18 @@ export async function syncBankAccount(
   try {
     const balance = await getAccountBalance(account.account_uid);
     if (balance !== null) {
+      const now = new Date().toISOString();
       await serviceClient
         .from("bank_accounts")
-        .update({ balance, balance_updated_at: new Date().toISOString() })
+        .update({ balance, balance_updated_at: now })
         .eq("id", account.id);
+      // Verlauf mitschreiben, damit wir später eine Trend-% anzeigen können.
+      await serviceClient.from("bank_balance_history").insert({
+        user_id: account.user_id,
+        account_id: account.id,
+        balance,
+        recorded_at: now,
+      });
     }
   } catch (err) {
     console.error("[bank-sync] Kontostand-Abruf fehlgeschlagen:", err instanceof Error ? err.message : err);

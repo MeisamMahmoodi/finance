@@ -6,6 +6,7 @@ import { GmailSyncButton } from "@/components/gmail-sync-button";
 import { BankSyncButton } from "@/components/bank-sync-button";
 import { CategorizeButton } from "@/components/categorize-button";
 import { IncomeInput } from "@/components/income-input";
+import { BottomNav } from "@/components/bottom-nav";
 
 const GMAIL_ERROR_MESSAGES: Record<string, string> = {
   denied: "Google-Zugriff wurde abgelehnt.",
@@ -68,7 +69,7 @@ export default async function SettingsPage({
     gmailConnection?.status === "connected" || bankConnection?.status === "connected";
 
   return (
-    <div className="min-h-dvh max-w-md mx-auto px-4 py-6">
+    <div className="min-h-dvh max-w-md mx-auto px-4 py-6 pb-28">
       <div className="flex items-center gap-3 mb-6">
         <Link href="/" aria-label="Zurück" className="w-9 h-9 rounded-full bg-surface flex items-center justify-center">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e6e6e6" strokeWidth="2">
@@ -194,6 +195,7 @@ export default async function SettingsPage({
       </div>
 
       <LogoutButton />
+      <BottomNav />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { demoTransactions, demoInsights } from "@/lib/demo-data";
-import type { Transaction, AiInsight } from "@/lib/types";
+import type { Transaction, AiInsight, Box } from "@/lib/types";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -36,9 +36,11 @@ export default async function DashboardPage() {
     .maybeSingle();
   const { data: bankConn } = await supabase
     .from("bank_connections")
-    .select("status")
+    .select("status, aspsp_name")
     .eq("user_id", user.id)
     .eq("status", "connected")
+    .order("created_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   const hasRealConnection = Boolean(gmailConn || bankConn);
 
@@ -65,27 +67,50 @@ export default async function DashboardPage() {
   // Startseite vor dem ersten Connect nicht leer/kaputt wirkt.
   const monthlyIncome = hasRealConnection ? (settings?.monthly_income ?? 0) : 3200;
 
-  // Echter Kontostand (Summe aller verbundenen Konten) statt Einnahmen-
+  // Echte Konten (Summe aller verbundenen Bankkonten) statt Einnahmen-
   // minus-Fixkosten-Schätzung, sobald die Bank mindestens einmal
   // synchronisiert wurde.
-  const { data: accountBalances } = await supabase
+  const { data: accounts } = await supabase
     .from("bank_accounts")
-    .select("balance, balance_updated_at")
+    .select("id, name, iban, balance, balance_updated_at")
     .eq("user_id", user.id)
     .not("balance", "is", null);
 
   const realBalance =
-    accountBalances && accountBalances.length > 0
-      ? accountBalances.reduce((sum, a) => sum + Number(a.balance), 0)
+    accounts && accounts.length > 0
+      ? accounts.reduce((sum, a) => sum + Number(a.balance), 0)
       : null;
   const balanceUpdatedAt =
-    accountBalances && accountBalances.length > 0
-      ? accountBalances
+    accounts && accounts.length > 0
+      ? accounts
           .map((a) => a.balance_updated_at)
           .filter(Boolean)
           .sort()
           .at(-1) ?? null
       : null;
+
+  // Trend: ältester bekannter Saldo der letzten 30 Tage vs. jetzt.
+  let balanceChangePercent: number | null = null;
+  if (accounts && accounts.length > 0) {
+    const accountIds = accounts.map((a) => a.id);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86_400_000).toISOString();
+    const { data: history } = await supabase
+      .from("bank_balance_history")
+      .select("balance, recorded_at")
+      .in("account_id", accountIds)
+      .gte("recorded_at", thirtyDaysAgo)
+      .order("recorded_at", { ascending: true })
+      .limit(1);
+    const oldest = history?.[0];
+    if (oldest && realBalance !== null && Number(oldest.balance) !== 0) {
+      balanceChangePercent = ((realBalance - Number(oldest.balance)) / Math.abs(Number(oldest.balance))) * 100;
+    }
+  }
+
+  const { data: boxesData } = await supabase
+    .from("boxes")
+    .select("*")
+    .order("created_at", { ascending: true });
 
   return (
     <DashboardShell
@@ -95,6 +120,14 @@ export default async function DashboardPage() {
       hasIncomeSet={Boolean(settings)}
       realBalance={realBalance}
       balanceUpdatedAt={balanceUpdatedAt}
+      balanceChangePercent={balanceChangePercent}
+      accounts={(accounts ?? []).map((a) => ({
+        id: a.id,
+        name: a.name || bankConn?.aspsp_name || "Bankkonto",
+        masked: a.iban ? `****${a.iban.slice(-4)}` : "****",
+        balance: Number(a.balance ?? 0),
+      }))}
+      boxes={(boxesData ?? []) as Box[]}
     />
   );
 }

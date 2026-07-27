@@ -10,6 +10,22 @@ const dateFormat = new Intl.DateTimeFormat("de-DE", {
   month: "short",
 });
 
+const CATEGORY_COLORS: Record<string, string> = {
+  Wiederkehrend: "#8b8bff",
+  Essen: "#f2c94c",
+  Transport: "#56ccf2",
+  Arbeit: "#bb86fc",
+  Spaß: "#ff8fab",
+  Wohnen: "#5dcaa5",
+  Shopping: "#f2994a",
+  Gesundheit: "#e2504a",
+  Sonstiges: "#6b6b70",
+};
+
+function categoryColor(category: string | null) {
+  return category ? (CATEGORY_COLORS[category] ?? "#6b6b70") : "#6b6b70";
+}
+
 function relativeLabel(iso: string) {
   const diffDays = Math.round(
     (new Date(iso).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) /
@@ -31,34 +47,44 @@ function initials(vendor: string) {
 
 export function Timeline({ transactions }: { transactions: Transaction[] }) {
   const sorted = [...transactions].sort(
-    (a, b) => new Date(a.charged_at).getTime() - new Date(b.charged_at).getTime(),
+    (a, b) => new Date(b.charged_at).getTime() - new Date(a.charged_at).getTime(),
   );
 
   return (
     <div className="flex flex-col">
-      <p className="text-xs text-secondary mb-3 px-1">Timeline</p>
+      <p className="text-xs text-secondary mb-3 px-1">Transactions</p>
       <div className="flex flex-col gap-1">
-        {sorted.map((t) => (
-          <div
-            key={t.id}
-            className="flex items-center gap-3 py-2.5 px-1 border-b border-border last:border-0"
-          >
-            <div className="w-9 h-9 rounded-lg bg-surface flex items-center justify-center text-xs font-medium shrink-0">
-              {initials(t.vendor)}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm truncate">{t.vendor}</p>
-              <p className="text-muted text-xs">{relativeLabel(t.charged_at)}</p>
-            </div>
-            <span
-              className={`text-sm shrink-0 ${
-                t.status === "upcoming" ? "text-[#f2f2f2]" : "text-secondary"
-              }`}
+        {sorted.map((t) => {
+          const color = categoryColor(t.category);
+          return (
+            <div
+              key={t.id}
+              className="flex items-center gap-3 py-2.5 px-1 border-b border-border last:border-0"
             >
-              {currencyFormat.format(t.amount)}
-            </span>
-          </div>
-        ))}
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium shrink-0"
+                style={{ backgroundColor: `${color}26`, color }}
+              >
+                {initials(t.vendor)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{t.vendor}</p>
+                <p className="text-muted text-xs">
+                  {relativeLabel(t.charged_at)}
+                  {t.category && ` · ${t.category}`}
+                </p>
+              </div>
+              <span
+                className={`text-sm shrink-0 ${
+                  t.status === "upcoming" ? "text-[#f2f2f2]" : "text-secondary"
+                }`}
+              >
+                {t.direction === "in" ? "+" : "−"}
+                {currencyFormat.format(t.amount)}
+              </span>
+            </div>
+          );
+        })}
         {sorted.length === 0 && (
           <p className="text-muted text-sm py-6 text-center">
             Noch keine Buchungen. Verbinde E-Mail oder Bank in den

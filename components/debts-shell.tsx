@@ -1,0 +1,94 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import { DebtCard } from "@/components/debt-card";
+import { AddDebtForm } from "@/components/add-debt-form";
+import type { Debt } from "@/lib/types";
+
+const currencyFormat = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
+
+type Period = "monthly" | "3-month" | "yearly";
+
+const PERIOD_LABELS: Record<Period, string> = {
+  monthly: "Monthly",
+  "3-month": "3-Month",
+  yearly: "Yearly",
+};
+
+const PERIOD_DAYS: Record<Period, number> = {
+  monthly: 31,
+  "3-month": 93,
+  yearly: 366,
+};
+
+export function DebtsShell({ debts }: { debts: Debt[] }) {
+  const [period, setPeriod] = useState<Period>("monthly");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+
+  const totalDue = useMemo(() => {
+    const horizon = Date.now() + PERIOD_DAYS[period] * 86_400_000;
+    return debts
+      .filter((d) => !d.next_due_date || new Date(d.next_due_date).getTime() <= horizon)
+      .reduce((sum, d) => sum + Math.max(d.total_amount - d.amount_paid, 0), 0);
+  }, [debts, period]);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="bg-surface rounded-card p-5 flex flex-col items-center">
+        <p className="text-secondary text-xs mb-1">This {PERIOD_LABELS[period]} Debts</p>
+        <p className="text-[36px] leading-none font-medium tracking-tight mb-3">
+          {currencyFormat.format(totalDue)}
+        </p>
+        <div className="relative">
+          <button
+            onClick={() => setPickerOpen((v) => !v)}
+            className="flex items-center gap-1.5 px-3 h-8 rounded-full bg-bg border border-border text-xs"
+          >
+            {PERIOD_LABELS[period]}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d={pickerOpen ? "M18 15l-6-6-6 6" : "M6 9l6 6 6-6"} />
+            </svg>
+          </button>
+          {pickerOpen && (
+            <div className="absolute top-9 left-1/2 -translate-x-1/2 bg-bg border border-border rounded-lg py-1 z-10 min-w-[120px]">
+              {(Object.keys(PERIOD_LABELS) as Period[]).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setPeriod(p);
+                    setPickerOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-1.5 text-xs ${p === period ? "text-accent" : "text-secondary"}`}
+                >
+                  {PERIOD_LABELS[p]}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {debts.map((d) => (
+          <DebtCard key={d.id} debt={d} />
+        ))}
+      </div>
+
+      {debts.length === 0 && !showForm && (
+        <p className="text-muted text-sm text-center py-4">Noch keine Debts angelegt.</p>
+      )}
+
+      {showForm ? (
+        <AddDebtForm onDone={() => setShowForm(false)} />
+      ) : (
+        <button
+          onClick={() => setShowForm(true)}
+          className="h-11 rounded-lg border border-dashed border-border text-secondary text-sm"
+        >
+          + Debt hinzufügen
+        </button>
+      )}
+    </div>
+  );
+}
