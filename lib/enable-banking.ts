@@ -123,8 +123,10 @@ export type EbBalance = {
 // Bevorzugte Reihenfolge, welcher Balance-Typ als "aktueller Kontostand"
 // gilt, falls die Bank mehrere zurückgibt (siehe Enable-Banking-Doku
 // BalanceStatus: XPCD = Instant/Expected, CLAV = Closing Available,
-// CLBD = Closing Booked).
-const BALANCE_TYPE_PRIORITY = ["XPCD", "CLAV", "ITAV", "CLBD", "ITBD"];
+// CLBD = Closing Booked/Accounting balance). CLBD steht vor ITAV/ITBD,
+// weil manche Banken (u.a. Stadtsparkasse München) bei ITAV pauschal 0,00
+// zurückgeben statt eines echten Zwischenstands - CLBD ist dort verlässlicher.
+const BALANCE_TYPE_PRIORITY = ["XPCD", "CLAV", "CLBD", "ITAV", "ITBD"];
 
 export async function getAccountBalance(accountUid: string): Promise<number | null> {
   const data = await ebFetch(`/accounts/${accountUid}/balances`);
