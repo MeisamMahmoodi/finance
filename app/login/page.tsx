@@ -47,9 +47,9 @@ export default function LoginPage() {
     <div className="min-h-dvh flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-3 overflow-hidden">
+          <div className="w-16 h-16 rounded-xl bg-surface flex items-center justify-center mb-3 overflow-hidden">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/login-icon.png" alt="AXIS" className="w-9 h-9 object-contain" />
+            <img src="/icons/login-icon.png" alt="AXIS" className="w-full h-full object-contain" />
           </div>
           <h1 className="text-[15px] font-medium">AXIS</h1>
           <p className="text-muted text-xs mt-1">Alles an einem Ort</p>
