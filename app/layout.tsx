@@ -3,13 +3,13 @@ import { RegisterSW } from "@/components/register-sw";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Finance & AI Hub",
+  title: "AXIS",
   description: "Privates Finanz- und AI-Dashboard",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Finance Hub",
+    title: "AXIS",
   },
 };
 

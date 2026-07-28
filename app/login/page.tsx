@@ -47,20 +47,11 @@ export default function LoginPage() {
     <div className="min-h-dvh flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-xl bg-surface flex items-center justify-center mb-3">
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#8b8bff"
-              strokeWidth="2"
-            >
-              <path d="M3 3v18h18" />
-              <path d="M18.7 8l-5.2 5.2-3-3L4 16.5" />
-            </svg>
+          <div className="w-14 h-14 rounded-xl bg-surface flex items-center justify-center mb-3 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/icons/login-icon.png" alt="AXIS" className="w-9 h-9 object-contain" />
           </div>
-          <h1 className="text-[15px] font-medium">Finance &amp; AI Hub</h1>
+          <h1 className="text-[15px] font-medium">AXIS</h1>
           <p className="text-muted text-xs mt-1">Alles an einem Ort</p>
         </div>
 

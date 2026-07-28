@@ -1,7 +1,7 @@
 "use client";
 
 export function Header({
-  title = "Finance Hub",
+  title = "AXIS",
   onSettingsClick,
 }: {
   title?: string;
